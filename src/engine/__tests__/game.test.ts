@@ -4,6 +4,7 @@ import { createPuzzle, type Puzzle } from '../daily';
 import {
   canHold,
   currentPiece,
+  decayStartsAt,
   dropPiece,
   holdPiece,
   isIsland,
@@ -194,6 +195,13 @@ describe('flow decay', () => {
     expect(tick(game, 300 + 5000).multTenths).toBe(13);
     expect(tick(game, 300 + 6000).multTenths).toBe(12);
     expect(tick(tick(game, 300 + 5000), 300 + 6000).multTenths).toBe(12); // same result tick by tick
+  });
+
+  it('starts exactly when decayStartsAt says', () => {
+    const game = flowing();
+    expect(decayStartsAt(game)).toBe(300 + 5000);
+    expect(tick(game, decayStartsAt(game) - 1).multTenths).toBe(14);
+    expect(tick(game, decayStartsAt(game)).multTenths).toBe(13);
   });
 
   it('never goes below 1.0×', () => {

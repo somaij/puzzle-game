@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
-import { COLS, PIECE_COUNT, ROWS } from '../engine/constants';
-import { indexOf, pieceType, rowColOf } from '../engine/cuts';
+import { COLS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS } from '../engine/constants';
+import { indexOf, rowColOf } from '../engine/cuts';
 import type { Puzzle } from '../engine/daily';
 import {
   canHold,
   currentPiece,
+  decayStartsAt,
   dropPiece,
   holdPiece,
-  isIsland,
   missesLeft,
   newGame,
   tick,
@@ -76,7 +76,7 @@ export function GameScreen({ puzzle, image }: Props) {
   const wide = screen.width >= WIDE_LAYOUT_MIN;
   const boardWidth = wide
     ? Math.min(screen.width - 32 - PANEL_WIDTH - GAP, (screen.height - 160) * (COLS / ROWS), 900)
-    : Math.min(screen.width - 32, (screen.height - 330) * (COLS / ROWS));
+    : Math.min(screen.width - 32, (screen.height - 390) * (COLS / ROWS));
   const cell = boardWidth / COLS;
   const dragPieceSize = Math.max(48, cell * DRAG_SCALE);
 
@@ -158,7 +158,15 @@ export function GameScreen({ puzzle, image }: Props) {
                 </Pressable>
               </View>
             </View>
-            <ScoreBar score={game.score} multTenths={game.multTenths} missesLeft={missesLeft(game)} />
+            <ScoreBar
+              score={game.score}
+              multTenths={game.multTenths}
+              missesLeft={missesLeft(game)}
+              decayCountdown={
+                playing && game.multTenths > MULT_MIN_TENTHS ? { from: game.lastPlacedAt, until: decayStartsAt(game) } : null
+              }
+              compact={!wide}
+            />
             <View>
               <Board
                 ref={boardRef}
@@ -196,13 +204,6 @@ export function GameScreen({ puzzle, image }: Props) {
             cuts={puzzle.cuts}
             image={image}
             current={current}
-            currentLabel={
-              playing && current !== null
-                ? { island: isIsland(game, current), type: pieceType(puzzle.cuts[current]) }
-                : null
-            }
-            presentedAt={game.presentedAt}
-            playing={playing}
             hold={game.hold}
             upcoming={upcomingPieces(game)}
             canHold={canHold(game)}

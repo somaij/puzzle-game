@@ -1,7 +1,4 @@
-import { useEffect, useState } from 'react';
 import {
-  Animated,
-  Easing,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,8 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { FAST_MS } from '../engine/constants';
-import { rowColOf, type Cut, type PieceType } from '../engine/cuts';
+import { rowColOf, type Cut } from '../engine/cuts';
 import { colors } from './colors';
 import { PieceSvg } from './PieceSvg';
 
@@ -21,11 +17,6 @@ type Props = {
   cuts: Cut[];
   image: ImageSourcePropType;
   current: number | null;
-  /** Whether the current piece would land as an island or a snap, and its type. */
-  currentLabel: { island: boolean; type: PieceType } | null;
-  /** When the current piece was dealt (performance.now() clock), for the fast-bonus bar. */
-  presentedAt: number;
-  playing: boolean;
   hold: number | null;
   upcoming: number[];
   canHold: boolean;
@@ -50,8 +41,7 @@ const draggableOnWeb =
 
 /** The one-at-a-time feed: current piece, hold slot, and the next few pieces. */
 export function FeedPanel(props: Props) {
-  const { cuts, image, current, currentLabel, presentedAt, playing, hold, upcoming, canHold, onHold, dragHandlers, dragging, compactWidth } =
-    props;
+  const { cuts, image, current, hold, upcoming, canHold, onHold, dragHandlers, dragging, compactWidth } = props;
   const compact = compactWidth !== undefined;
   const sizes = compact ? compactSizes(compactWidth) : { current: 120, hold: 72, next: 54 };
   const piece = (i: number, size: number) => {
@@ -61,7 +51,7 @@ export function FeedPanel(props: Props) {
 
   return (
     <View style={[styles.panel, compact && styles.panelCompact]}>
-      <View style={[styles.section, { width: sizes.current }]}>
+      <View style={styles.section}>
         <Text style={styles.label}>Current</Text>
         <View
           testID="current-piece"
@@ -70,12 +60,6 @@ export function FeedPanel(props: Props) {
         >
           {current !== null && piece(current, sizes.current)}
         </View>
-        <FastBar presentedAt={presentedAt} running={playing} />
-        {currentLabel && (
-          <Text testID="current-label" style={[styles.chip, { color: currentLabel.island ? colors.accent : colors.muted }]}>
-            {currentLabel.island ? 'Island' : 'Snap'} · {currentLabel.type}
-          </Text>
-        )}
       </View>
 
       <View style={styles.section}>
@@ -106,25 +90,6 @@ export function FeedPanel(props: Props) {
   );
 }
 
-/** Empties over FAST_MS from when the piece was dealt: place it before the bar runs out for the fast bonus. */
-function FastBar({ presentedAt, running }: { presentedAt: number; running: boolean }) {
-  const [left] = useState(() => new Animated.Value(1));
-  useEffect(() => {
-    const remaining = running ? Math.max(0, FAST_MS - (performance.now() - presentedAt)) : 0;
-    left.setValue(remaining / FAST_MS);
-    const animation = Animated.timing(left, { toValue: 0, duration: remaining, easing: Easing.linear, useNativeDriver: false });
-    animation.start();
-    return () => animation.stop();
-  }, [left, presentedAt, running]);
-
-  const width = left.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
-  return (
-    <View style={styles.fastTrack}>
-      <Animated.View style={[styles.fastFill, { width }]} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   panel: {
     width: 240,
@@ -138,12 +103,9 @@ const styles = StyleSheet.create({
   panelCompact: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: 14, padding: 10 },
   section: { gap: 8 },
   label: { color: colors.muted, fontSize: 11, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
-  chip: { fontSize: 12, fontWeight: '600' },
   slot: { alignItems: 'center', justifyContent: 'center' },
   holdSlot: { borderColor: colors.line, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8 },
   queue: { flexDirection: 'row', gap: 6 },
-  fastTrack: { height: 5, borderRadius: 3, backgroundColor: colors.surfaceRaised, overflow: 'hidden' },
-  fastFill: { height: '100%', borderRadius: 3, backgroundColor: colors.gold },
   hidden: { opacity: 0 },
   dimmed: { opacity: 0.5 },
 });

@@ -117,6 +117,11 @@ export function isIsland(state: GameState, piece: number): boolean {
   return !orthogonalNeighbours(piece).some((n) => state.placed[n]);
 }
 
+/** When the multiplier will first drop if nothing more is placed (stall decay's first step). */
+export function decayStartsAt(state: GameState): number {
+  return state.lastPlacedAt + STALL_MS + DECAY_TICK_MS;
+}
+
 /**
  * Advance the clocks: apply stall decay (−0.1× per DECAY_TICK_MS once STALL_MS has passed
  * since the last placement, so the first step lands at STALL_MS + DECAY_TICK_MS) and drop

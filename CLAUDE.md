@@ -27,8 +27,9 @@ that makes jigsaws from *your own photos*, sold as a one-time purchase.
 
 Checkpoints 1–3 done: the daily puzzle is playable and scored on web.
 One-at-a-time feed, hold, next-3 preview, drag-to-place (mouse and touch),
-island/snap scoring, flow multiplier with fast bar and stall decay, pulse
-ghosts, and a 10-miss limit (win on all 24 placed, fail on the 10th miss).
+island/snap scoring, score multiplier with fast bonus, stall decay and a
+countdown to the next drop, pulse ghosts, and a 12-miss limit (win on all 24
+placed, fail on the 12th miss).
 "Restart" replays freely until the one-play-per-day loop lands (checkpoint 4).
 
 Test build is live at https://somaij.github.io/puzzle-game/ (GitHub Pages,
@@ -95,8 +96,17 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   - **Island** = placed with no already-placed orthogonal neighbour. Hard, a
     real read/gamble. Base **100**.
   - **Snap** = touches at least one placed piece. Easier, deducible. Base **25**.
-- *Tempo axis (the flow multiplier):*
+- *Tempo axis (the flow multiplier, shown to players as "Score multiplier"):*
   - Range **1.0×–1.5×**. Starts at 1.0.
+  - The multiplier box shows the level (gold meter) and **the time until the
+    multiplier drops**, both as seconds beside the meter ("3.2s", tenths,
+    rounded up; "0.0s" in red while it is dropping) and as a line along the
+    box's bottom edge. Both run from the last placement to the first decay
+    step (`decayStartsAt`), reset on each placement, and are hidden at 1.0×
+    (nothing left to lose). Holds and
+    misses don't refill it. The 3.5 s fast window is deliberately *not* shown:
+    a countdown running at 1.0× read to playtesters as the multiplier running
+    out.
   - A "fast" placement (within **3500 ms** of the piece appearing) adds **+0.1**.
   - After a **4000 ms** stall (no placement), the multiplier ticks **−0.1 per
     1000 ms** back toward 1.0.
@@ -106,7 +116,7 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   island/snap gap the primary score lever, not the multiplier.
 
 **Misses (Wordle-style limit)**
-- Each puzzle allows **10 wrong drops** (`MISS_LIMIT`). The 10th ends the game
+- Each puzzle allows **12 wrong drops** (`MISS_LIMIT`). The 12th ends the game
   ("Out of misses", status `failed`), keeping the score and pieces placed so
   far. Off-board / filled-cell drops don't count.
 - Why: the multiplier can't go below 1.0×, so on its own a misplace cost
@@ -131,10 +141,10 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   so it doesn't depend on how often the UI ticks.
 - **The fast bonus is applied before scoring,** so the placement that earns
   +0.1 is paid at the raised multiplier.
-- **The current piece is labelled before you place it.** The POC's panel says
-  "island" or "snaps" plus corner/edge/interior. "Snaps" tells you the piece
-  belongs next to the placed cluster, which is a pre-placement correctness hint
-  (see open questions).
+- **The POC labels the current piece before you place it** ("island" or
+  "snaps", plus corner/edge/interior). **This app doesn't**: the label was
+  removed after playtesting. "Snaps" told you the piece belongs next to the
+  placed cluster, a pre-placement correctness hint. Don't reintroduce it.
 
 **Fixes: where the POC is wrong and this spec wins**
 - **End of deck.** When the deck runs out, the held piece becomes current.
@@ -161,7 +171,7 @@ In code: `src/engine/constants.ts` (multiplier values stored as tenths).
 | WRONG_PENALTY | 0.1 | mult lost on a misplace |
 | PULSE_RADIUS | 1 | Chebyshev radius the pulse reveals |
 | PULSE_MS | 4200 | how long the pulse ghost stays |
-| MISS_LIMIT | 10 | wrong drops per puzzle; the 10th ends the game |
+| MISS_LIMIT | 12 | wrong drops per puzzle; the 12th ends the game |
 
 Treat these as balancing knobs, not gospel. They're where tuning happens.
 
@@ -227,8 +237,9 @@ src/engine/              constants, rng, cuts, geometry, daily, game (+ __tests_
 src/ui/GameScreen.tsx    game state + 100 ms clock tick, layout (wide: side panel; narrow: feed below), end card
 src/ui/usePieceDrag.ts   drag via RN responder props (no PanResponder, no gesture libs)
 src/ui/Board.tsx         placed pieces, pulse ghosts, hover outline, wrong-cell flash, rising "+points" text
-src/ui/FeedPanel.tsx     current (+ fast bar, island/snap label) / hold / next
-src/ui/ScoreBar.tsx      score, flow multiplier meter, misses left
+src/ui/FeedPanel.tsx     current / hold / next
+src/ui/ScoreBar.tsx      score, score multiplier (level meter + countdown to its next drop), misses left;
+                         one row when wide, two rows on phones
 src/ui/PieceSvg.tsx      one piece: image clipped to its cut
 src/puzzleImages.ts      the daily image list
 assets/puzzles/          daily images + CREDITS.md
@@ -259,7 +270,7 @@ Run typecheck, lint and tests before calling a task done.
   1. ✅ Scaffold, engine (cuts/geometry/daily seed), draw today's pieces.
   2. ✅ One-at-a-time feed + hold + drag-to-place with correct/wrong/return,
      including the end-of-deck fix.
-  3. ✅ Scoring + flow multiplier + pulse + 10-miss limit.
+  3. ✅ Scoring + flow multiplier + pulse + 12-miss limit.
   4. Daily loop: one play per day, result screen, share text, stats/streak.
   5. Publish the static web build. (Test build already on GitHub Pages; the
      public launch, and its domain, is still to decide.)
@@ -273,8 +284,9 @@ Run typecheck, lint and tests before calling a task done.
 
 ## Open questions
 
-- **Is 10 misses the right number?** Started at 6; playtesting found that too
-  punishing, so it is now 10 (see Misses). Still to tune. The first piece is always a blind island: by
+- **Is 12 misses the right number?** Started at 6, then 10; playtesting found
+  both too punishing, so it is now 12 (see Misses). Still to tune. The first
+  piece is always a blind island: by
   cut shape alone a corner has 1 possible cell, a top/bottom edge 4, a
   left/right edge 2, and an interior piece 8, so an unlucky first deal can cost
   a few misses before play really starts (holding for a corner helps).
@@ -283,10 +295,6 @@ Run typecheck, lint and tests before calling a task done.
   pulse), with no guessing. Keep it as a chaining feature, or reveal only the
   4 side cells? Seen in testing: fast island play overlaps pulses and can ghost
   most of the empty board at once.
-- **Pre-placement island/snap label.** Currently shown, as in the POC ("Island ·
-  edge"). Keep it (it drives the hold decision) or drop it (it leaks whether the
-  piece touches the placed cluster, which matters more now that misses are
-  limited)?
 - **Unknown image.** Daily players haven't seen the picture, unlike their own
   photos. Show it briefly at the start, or show nothing?
 - **Daily image supply** and licensing at scale.

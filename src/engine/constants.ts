@@ -9,8 +9,8 @@ export const TAB_DEPTH = 14; // how far a tab sticks out past the cell edge
 export const PAD = 18; // margin drawn around each cell so tabs and outlines aren't clipped
 
 // Wrong drops allowed per puzzle; the one that uses up the last ends the game (like running out of guesses in Wordle).
-// Was 6; raised to 10 after playtesting found 6 too punishing.
-export const MISS_LIMIT = 10;
+// Started at 6; raised to 10, then 12, after playtesting found it too punishing.
+export const MISS_LIMIT = 12;
 
 // Scoring and flow. The multiplier is stored in whole tenths (10 = 1.0×) so repeated
 // steps can't drift the way floating-point decimals do.
