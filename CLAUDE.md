@@ -31,6 +31,9 @@ island/snap scoring, flow multiplier with fast bar and stall decay, pulse
 ghosts, and a 10-miss limit (win on all 24 placed, fail on the 10th miss).
 "Restart" replays freely until the one-play-per-day loop lands (checkpoint 4).
 
+Test build is live at https://somaij.github.io/puzzle-game/ (GitHub Pages,
+public repo `somaij/puzzle-game`). Redeploy with `npm run deploy`.
+
 ## The POC (read this first)
 
 `docs/poc/pulse-puzzle.html` is the downloaded single-file HTML prototype. Treat
@@ -204,6 +207,11 @@ Treat these as balancing knobs, not gospel. They're where tuning happens.
   SVG ids share one namespace per web page, so clip ids come from `useId()`.
 - **Web output:** single-page static site (`expo export --platform web` →
   `dist/`), no Expo Router, no server.
+- **Hosting (testing):** GitHub Pages serves the site under `/puzzle-game/`, so
+  `app.json` sets `experiments.baseUrl: "/puzzle-game"` (the dev server still
+  serves at `/`). `npm run deploy` exports and pushes `dist/` to the `gh-pages`
+  branch with `--nojekyll` (Jekyll would drop the `_expo/` folder). Moving to a
+  custom domain or a host that serves from the root means removing `baseUrl`.
 - **Privacy is a hard constraint.** No backend, accounts, analytics, ad SDKs, or
   any dependency that phones home, so flag it rather than adding it. Fonts must be
   bundled with the site (the POC loads Google Fonts from Google's servers; don't
@@ -238,7 +246,8 @@ npm run web              # dev server, opens the web build
 npm test                 # Jest (engine tests)
 npm run typecheck        # tsc --noEmit
 npm run lint             # expo lint
-npm run export:web       # static site → dist/  (preview: npx serve dist)
+npm run export:web       # static site → dist/  (paths are under /puzzle-game/)
+npm run deploy           # export + publish to GitHub Pages (gh-pages branch)
 npx expo-doctor          # dependency/config health check
 ```
 Run typecheck, lint and tests before calling a task done.
@@ -252,7 +261,8 @@ Run typecheck, lint and tests before calling a task done.
      including the end-of-deck fix.
   3. ✅ Scoring + flow multiplier + pulse + 10-miss limit.
   4. Daily loop: one play per day, result screen, share text, stats/streak.
-  5. Publish the static web build.
+  5. Publish the static web build. (Test build already on GitHub Pages; the
+     public launch, and its domain, is still to decide.)
   6. Later: Android build, own-photo mode, Zen mode, monetization.
 - **Adversarial evaluation.** Pressure-test ideas; push back on hand-wavy
   reasoning rather than validating by default. Update positions with precision.
