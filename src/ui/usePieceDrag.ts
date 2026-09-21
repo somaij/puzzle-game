@@ -67,6 +67,9 @@ export function usePieceDrag({ enabled, pieceSize, cellAt, onStart, onDrop }: Op
       gesture.current.lift = isTouchScreen() ? pieceSize * TOUCH_LIFT : 0;
       setDragging(true);
       moveTo(e);
+      // true = keep native views (the screen's ScrollView on Android) from taking over the touch.
+      // On web the piece's `touchAction: 'none'` does the same job.
+      return true;
     },
     onResponderMove: moveTo,
     // Use the release point itself: the last move event can lag behind a fast flick.

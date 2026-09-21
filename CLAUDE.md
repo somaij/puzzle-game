@@ -240,12 +240,14 @@ Treat these as balancing knobs, not gospel. They're where tuning happens.
 ```
 App.tsx                  picks today's puzzle, renders GameScreen
 src/engine/              constants, rng, cuts, geometry, daily, game (+ __tests__/)
-src/ui/GameScreen.tsx    game state + 100 ms clock tick, layout (wide: side panel; narrow: feed below), end card
+src/ui/GameScreen.tsx    game state + 100 ms clock tick, layout (wide: side panel; narrow: feed below), end card;
+                         everything sits in a ScrollView so the rules can follow the game
 src/ui/usePieceDrag.ts   drag via RN responder props (no PanResponder, no gesture libs)
 src/ui/Board.tsx         placed pieces, pulse ghosts, hover outline, wrong-cell flash, rising "+points" text
 src/ui/FeedPanel.tsx     current / hold / next
 src/ui/ScoreBar.tsx      score, score multiplier (level meter + countdown to its next drop), misses left;
                          one row when wide, two rows on phones
+src/ui/HowToPlay.tsx     rules for testers, below the game; numbers come from engine constants
 src/ui/PieceSvg.tsx      one piece: image clipped to its cut
 src/puzzleImages.ts      the daily image list
 assets/puzzles/          daily images + CREDITS.md

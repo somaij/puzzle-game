@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
+import {
+  Animated,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type ImageSourcePropType,
+} from 'react-native';
 
 import { COLS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS } from '../engine/constants';
 import { indexOf, rowColOf } from '../engine/cuts';
@@ -20,6 +30,7 @@ import {
 import { Board, type FloatText } from './Board';
 import { colors } from './colors';
 import { FeedPanel } from './FeedPanel';
+import { HowToPlay } from './HowToPlay';
 import { PieceSvg } from './PieceSvg';
 import { ScoreBar, withCommas } from './ScoreBar';
 import { usePieceDrag } from './usePieceDrag';
@@ -153,7 +164,8 @@ export function GameScreen({ puzzle, image }: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.screen}>
+      {/* Scrolls so the rules can sit below the game. Drags on the current piece don't scroll (see usePieceDrag). */}
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.screen}>
         <View style={[styles.layout, wide ? styles.layoutWide : styles.layoutNarrow]}>
           <View style={[styles.boardColumn, { width: boardWidth }]}>
             <View style={styles.header}>
@@ -223,7 +235,9 @@ export function GameScreen({ puzzle, image }: Props) {
             compactWidth={wide ? undefined : boardWidth}
           />
         </View>
-      </View>
+
+        <HowToPlay width={wide ? boardWidth + GAP + PANEL_WIDTH : boardWidth} />
+      </ScrollView>
 
       {/* The dragged copy, in window coordinates, so it sits in an unpadded root at the window origin. */}
       {drag.dragging && current !== null && (
@@ -243,12 +257,14 @@ export function GameScreen({ puzzle, image }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, userSelect: 'none' },
+  scroll: { flex: 1, backgroundColor: colors.background },
+  // Grows to at least the screen height, so the game stays centred when everything fits.
   screen: {
-    flex: 1,
-    backgroundColor: colors.background,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
+    gap: 28,
   },
   layout: { gap: GAP },
   layoutWide: { flexDirection: 'row', alignItems: 'flex-start' },
