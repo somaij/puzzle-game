@@ -235,12 +235,16 @@ describe('fast window', () => {
 });
 
 describe('misses', () => {
-  it('cost a miss and 0.1× flow, but never below 1.0×', () => {
+  it('cost a miss and 0.1× flow, but never below 1.0×, and report what was lost', () => {
     let game = placeCurrent(newGame(rowMajor, 0), 100); // 1.1×
-    game = dropPiece(game, 10, 200).state;
+    const first = dropPiece(game, 10, 200);
+    expect(first.miss).toEqual({ cell: 10, multLostTenths: 1 });
+    game = first.state;
     expect(game.multTenths).toBe(10);
     expect(missesLeft(game)).toBe(MISS_LIMIT - 1);
-    game = dropPiece(game, 10, 300).state;
+    const second = dropPiece(game, 10, 300);
+    expect(second.miss).toEqual({ cell: 10, multLostTenths: 0 });
+    game = second.state;
     expect(game.multTenths).toBe(10);
     expect(game.moves).toEqual(['island', 'miss', 'miss']);
   });

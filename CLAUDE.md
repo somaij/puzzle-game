@@ -124,6 +124,12 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   daily score needs wrong guesses to cost something.
 - Every placement and miss is recorded in order (`moves`: island / snap / miss)
   for the shareable result.
+- **A miss must read as costing the multiplier** (playtesters missed it when
+  the number just changed quietly). On a miss: "MISS" rises in red from the
+  cell, plus "−0.1×" when the multiplier actually dropped (`dropPiece` returns
+  `miss.multLostTenths`, 0 at 1.0×). The misses box border flashes red; if the
+  multiplier dropped, its box also flashes red, shakes, turns the value red and
+  shows "−0.1" beside it. Red holds 0.3 s, then fades over 0.7 s.
 
 **Pulse (the assist reward)**
 - Fires on **any correct island placement** (not gated on speed; islands are

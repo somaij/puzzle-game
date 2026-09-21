@@ -14,6 +14,7 @@ import {
   newGame,
   tick,
   upcomingPieces,
+  type Miss,
   type Placement,
 } from '../engine/game';
 import { Board, type FloatText } from './Board';
@@ -52,22 +53,28 @@ export function GameScreen({ puzzle, image }: Props) {
     return () => clearInterval(id);
   }, [game.status]);
 
-  // Floating "+110" / "PULSE" text over the placed piece.
+  // Floating text over a cell: "+110" / "PULSE" on a placement, "MISS" / "−0.1×" on a miss.
   const [floats, setFloats] = useState<FloatText[]>([]);
   const nextFloatId = useRef(0);
   const removeFloat = useCallback((id: number) => setFloats((fs) => fs.filter((f) => f.id !== id)), []);
-  const showPlacement = (p: Placement) => {
-    const add = (text: string, color: string, large: boolean, line: number): FloatText => ({
-      id: nextFloatId.current++,
-      cell: p.cell,
-      text,
-      color,
-      large,
-      line,
-    });
-    const added = [add(`+${p.points}`, p.island ? colors.accent : colors.gold, p.island, 0)];
-    if (p.pulse) added.push(add('PULSE', colors.accent, false, 1));
+  const showFloats = (cell: number, lines: { text: string; color: string; large: boolean }[]) => {
+    const added = lines.map((l, line) => ({ ...l, cell, line, id: nextFloatId.current++ }));
     setFloats((fs) => [...fs, ...added]);
+  };
+  const showPlacement = (p: Placement) => {
+    const lines = [{ text: `+${p.points}`, color: p.island ? colors.accent : colors.gold, large: p.island }];
+    if (p.pulse) lines.push({ text: 'PULSE', color: colors.accent, large: false });
+    showFloats(p.cell, lines);
+  };
+
+  // A miss has to read as costing the multiplier: red text at the cell, and the score bar flashes.
+  const [missFlash, setMissFlash] = useState<{ id: number; multLostTenths: number } | null>(null);
+  const nextMissId = useRef(0);
+  const showMiss = (m: Miss) => {
+    const lines = [{ text: 'MISS', color: colors.bad, large: true }];
+    if (m.multLostTenths > 0) lines.push({ text: `−${(m.multLostTenths / 10).toFixed(1)}×`, color: colors.bad, large: false });
+    showFloats(m.cell, lines);
+    setMissFlash({ id: nextMissId.current++, multLostTenths: m.multLostTenths });
   };
 
   // Layout: board beside the feed on wide screens, feed under the board on narrow ones.
@@ -106,9 +113,10 @@ export function GameScreen({ puzzle, image }: Props) {
     cellAt,
     onStart: measureBoard,
     onDrop: (cell) => {
-      const { state, result, placement } = dropPiece(game, cell, now());
+      const { state, result, placement, miss } = dropPiece(game, cell, now());
       setGame(state);
       if (placement) showPlacement(placement);
+      if (miss) showMiss(miss);
       if (result === 'wrong') {
         setWrongCell(cell);
         clearTimeout(wrongTimer.current);
@@ -139,6 +147,7 @@ export function GameScreen({ puzzle, image }: Props) {
 
   const restart = () => {
     setFloats([]);
+    setMissFlash(null);
     setGame(newGame(puzzle, now()));
   };
 
@@ -162,6 +171,7 @@ export function GameScreen({ puzzle, image }: Props) {
               score={game.score}
               multTenths={game.multTenths}
               missesLeft={missesLeft(game)}
+              missFlash={missFlash}
               decayCountdown={
                 playing && game.multTenths > MULT_MIN_TENTHS ? { from: game.lastPlacedAt, until: decayStartsAt(game) } : null
               }

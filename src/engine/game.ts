@@ -65,6 +65,8 @@ export type GameState = {
 export type DropResult = 'placed' | 'wrong' | 'returned';
 
 export type Placement = { cell: number; island: boolean; fast: boolean; points: number; pulse: boolean };
+/** A wrong drop: where, and how much multiplier it cost (0 when already at 1.0×). */
+export type Miss = { cell: number; multLostTenths: number };
 
 export function newGame(puzzle: Puzzle, now: number): GameState {
   return {
@@ -161,7 +163,7 @@ export function dropPiece(
   state: GameState,
   cell: number | null,
   now: number,
-): { state: GameState; result: DropResult; placement?: Placement } {
+): { state: GameState; result: DropResult; placement?: Placement; miss?: Miss } {
   const s = tick(state, now);
   const current = currentPiece(s);
   if (s.status !== 'playing' || current === null) return { state: s, result: 'returned' };
@@ -169,16 +171,18 @@ export function dropPiece(
 
   if (cell !== current) {
     const misses = s.misses + 1;
+    const multTenths = Math.max(MULT_MIN_TENTHS, s.multTenths - WRONG_PENALTY_TENTHS);
     return {
       state: {
         ...s,
         misses,
-        multTenths: Math.max(MULT_MIN_TENTHS, s.multTenths - WRONG_PENALTY_TENTHS),
+        multTenths,
         presentedAt: now,
         moves: [...s.moves, 'miss'],
         status: misses >= MISS_LIMIT ? 'failed' : 'playing',
       },
       result: 'wrong',
+      miss: { cell, multLostTenths: s.multTenths - multTenths },
     };
   }
 
