@@ -27,10 +27,12 @@ import {
   type Miss,
   type Placement,
 } from '../engine/game';
+import { getStoredFlag, setStoredFlag } from '../storage';
 import { Board, type FloatText } from './Board';
 import { colors } from './colors';
 import { FeedPanel } from './FeedPanel';
 import { HowToPlay } from './HowToPlay';
+import { OnboardingModal } from './OnboardingModal';
 import { PieceSvg } from './PieceSvg';
 import { ScoreBar, withCommas } from './ScoreBar';
 import { usePieceDrag } from './usePieceDrag';
@@ -47,6 +49,8 @@ const WRONG_FLASH_MS = 300;
 const TICK_MS = 100;
 /** The dragged piece's box relative to a cell, as in the POC: its body is ~82% of a cell, so the outline of the cell under it stays visible. */
 const DRAG_SCALE = 1.12;
+/** Bump this to make the onboarding popup show again for everyone (a content change, say). */
+const ONBOARDING_KEY = 'onboarding-seen-v1';
 
 /** One monotonic clock for everything the engine times. */
 const now = () => performance.now();
@@ -56,6 +60,16 @@ export function GameScreen({ puzzle, image }: Props) {
   const [wrongCell, setWrongCell] = useState<number | null>(null);
   const wrongTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(wrongTimer.current), []);
+
+  // Shown once per browser (see storage.ts), or any time from the header's "?" button.
+  const [onboardingVisible, setOnboardingVisible] = useState(() => getStoredFlag(ONBOARDING_KEY) !== '1');
+  const dismissOnboarding = () => {
+    setStoredFlag(ONBOARDING_KEY, '1');
+    setOnboardingVisible(false);
+    // Reading time before the very first move shouldn't burn the fast-placement window or start
+    // the stall decay early, so give an untouched game's clocks a fresh start.
+    setGame((g) => (g.placedCount === 0 && g.misses === 0 ? newGame(puzzle, now()) : g));
+  };
 
   // Flow decay and pulse fade depend on time passing, not just on moves.
   useEffect(() => {
@@ -119,7 +133,7 @@ export function GameScreen({ puzzle, image }: Props) {
   const current = currentPiece(game);
   const playing = game.status === 'playing';
   const drag = usePieceDrag({
-    enabled: playing && current !== null,
+    enabled: playing && current !== null && !onboardingVisible,
     pieceSize: dragPieceSize,
     cellAt,
     onStart: measureBoard,
@@ -136,12 +150,13 @@ export function GameScreen({ puzzle, image }: Props) {
     },
   });
 
-  // Hold is ignored mid-drag, so the piece in your hand can't change under you.
+  // Hold is ignored mid-drag (so the piece in your hand can't change under you) and while the
+  // onboarding popup covers the board (its Space shortcut would otherwise reach right through it).
   const dragging = drag.dragging;
-  const hold = () => {
+  const hold = useCallback(() => {
     const t = now();
-    if (!dragging) setGame((g) => holdPiece(g, t));
-  };
+    if (!dragging && !onboardingVisible) setGame((g) => holdPiece(g, t));
+  }, [dragging, onboardingVisible]);
 
   // Space holds, on web.
   useEffect(() => {
@@ -149,12 +164,11 @@ export function GameScreen({ puzzle, image }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Space') return;
       e.preventDefault();
-      const t = now();
-      if (!dragging) setGame((g) => holdPiece(g, t));
+      hold();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dragging]);
+  }, [hold]);
 
   const restart = () => {
     setFloats([]);
@@ -174,6 +188,15 @@ export function GameScreen({ puzzle, image }: Props) {
                 <Text testID="placed-count" style={styles.count}>
                   {game.placedCount}/{PIECE_COUNT}
                 </Text>
+                <Pressable
+                  testID="help-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="How to play"
+                  style={styles.helpButton}
+                  onPress={() => setOnboardingVisible(true)}
+                >
+                  <Text style={styles.helpButtonText}>?</Text>
+                </Pressable>
                 <Pressable style={styles.button} onPress={restart}>
                   <Text style={styles.buttonText}>Restart</Text>
                 </Pressable>
@@ -251,6 +274,9 @@ export function GameScreen({ puzzle, image }: Props) {
           />
         </Animated.View>
       )}
+
+      {/* Covers the viewport (not the full scroll height), and its own backdrop blocks clicks and wheel-scroll underneath. */}
+      <OnboardingModal visible={onboardingVisible} onDismiss={dismissOnboarding} />
     </View>
   );
 }
@@ -283,6 +309,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   buttonText: { color: colors.muted, fontSize: 13, fontWeight: '600' },
+  helpButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.line,
+    borderWidth: 1,
+  },
+  helpButtonText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
   primaryButton: { backgroundColor: colors.accent, borderColor: colors.accent, marginTop: 6 },
   primaryButtonText: { color: '#06201d', fontSize: 14, fontWeight: '700' },
   overlay: {
