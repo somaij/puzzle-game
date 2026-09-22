@@ -195,7 +195,7 @@ export function GameScreen({ puzzle, image }: Props) {
                 cuts={puzzle.cuts}
                 image={image}
                 placed={game.placed}
-                ghosts={game.ghosts.map((g) => g.cell)}
+                ghosts={game.ghosts}
                 floats={floats}
                 onFloatDone={removeFloat}
                 width={boardWidth}

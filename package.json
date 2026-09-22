@@ -21,6 +21,7 @@
     "gh-pages": "^6.3.0",
     "jest": "^29.7.0",
     "jest-expo": "^57.0.5",
+    "sharp": "^0.35.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -33,7 +34,9 @@
     "export:web": "expo export --platform web",
     "lint": "expo lint",
     "predeploy": "expo export --platform web",
-    "deploy": "gh-pages --nojekyll -d dist"
+    "deploy": "gh-pages --nojekyll -d dist",
+    "photos:review": "node scripts/prepare-photos.mjs review",
+    "photos:add": "node scripts/prepare-photos.mjs add"
   },
   "private": true,
   "jest": {

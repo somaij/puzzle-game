@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Your original photos: never committed (large, and they often carry GPS location).
+# Only the README is tracked; prepared copies go to assets/puzzles/ via `npm run photos:add`.
+/photos-inbox/*
+!/photos-inbox/README.md

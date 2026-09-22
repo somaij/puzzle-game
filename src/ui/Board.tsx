@@ -3,6 +3,7 @@ import { Animated, Easing, Platform, StyleSheet, View, type ImageSourcePropType,
 
 import { COLS, ROWS } from '../engine/constants';
 import { rowColOf, type Cut } from '../engine/cuts';
+import type { Ghost } from '../engine/game';
 import { PIECE_OFFSET, PIECE_SCALE } from '../engine/geometry';
 import { colors } from './colors';
 import { PieceSvg } from './PieceSvg';
@@ -14,8 +15,8 @@ type Props = {
   cuts: Cut[];
   image: ImageSourcePropType;
   placed: readonly boolean[];
-  /** Cells showing a pulse ghost. */
-  ghosts: number[];
+  /** Pulse ghosts: which cells, and when each disappears (performance.now() clock). */
+  ghosts: readonly Ghost[];
   floats: FloatText[];
   onFloatDone: (id: number) => void;
   /** Outer width, including the 1px frame. */
@@ -49,14 +50,9 @@ export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width,
   return (
     <View style={styles.frame}>
       <View ref={ref} testID="board" style={[styles.board, { width: playWidth, height: cell * ROWS }]}>
-        {ghosts.map((i) => {
-          const p = pieceAt(i);
-          return (
-            <View key={`ghost-${i}`} style={[styles.piece, { left: p.left, top: p.top }]}>
-              <PieceSvg cut={cuts[i]} row={p.row} col={p.col} image={image} size={p.size} ghost />
-            </View>
-          );
-        })}
+        {ghosts.map((g) => (
+          <GhostPiece key={`ghost-${g.cell}-${g.until}`} {...pieceAt(g.cell)} cut={cuts[g.cell]} image={image} until={g.until} />
+        ))}
         {cuts.map((cut, i) => (placed[i] ? <PlacedPiece key={i} {...pieceAt(i)} cut={cut} image={image} /> : null))}
         {hoverCell !== null && !placed[hoverCell] && <CellOutline index={hoverCell} cell={cell} style={styles.hover} />}
         {wrongCell !== null && <CellOutline index={wrongCell} cell={cell} style={styles.wrong} />}
@@ -81,6 +77,26 @@ function PlacedPiece({ row, col, left, top, size, cut, image }: PlacedProps) {
   return (
     <Animated.View style={[styles.piece, { left, top, transform: [{ scale }] }]}>
       <PieceSvg cut={cut} row={row} col={col} image={image} size={size} />
+    </Animated.View>
+  );
+}
+
+/**
+ * A pulse ghost. It fades out over its lifetime so you can see when it will go: slowly at
+ * first (still readable for most of it), fastest at the end, reaching 0 as it is removed.
+ */
+function GhostPiece({ row, col, left, top, size, cut, image, until }: PlacedProps & { until: number }) {
+  const [opacity] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    const remaining = Math.max(0, until - performance.now());
+    const fade = Animated.timing(opacity, { toValue: 0, duration: remaining, easing: Easing.in(Easing.quad), useNativeDriver: nativeDriver });
+    fade.start();
+    return () => fade.stop();
+  }, [opacity, until]);
+
+  return (
+    <Animated.View testID="ghost" style={[styles.piece, { left, top, opacity }]}>
+      <PieceSvg cut={cut} row={row} col={col} image={image} size={size} ghost />
     </Animated.View>
   );
 }

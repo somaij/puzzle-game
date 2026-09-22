@@ -7,6 +7,7 @@ import {
   MISS_LIMIT,
   MULT_MAX_TENTHS,
   MULT_STEP_TENTHS,
+  PULSE_MS,
   SNAP_POINTS,
   STALL_MS,
   WRONG_PENALTY_TENTHS,
@@ -40,7 +41,7 @@ const RULES: { lead: string; text: string }[] = [
   },
   {
     lead: 'Pulse',
-    text: 'Placing an island correctly briefly shows the pieces around it. Use it to line up your next moves.',
+    text: `Placing an island correctly shows the pieces around it for ${seconds(PULSE_MS)} seconds, fading as time runs out. Use it to line up your next moves.`,
   },
   {
     lead: 'Misses',
