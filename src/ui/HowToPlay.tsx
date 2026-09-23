@@ -5,6 +5,7 @@ import {
   FAST_MS,
   FLASH_MS,
   HAND_SIZE,
+  HOLD_SLOT,
   ISLAND_POINTS,
   MISS_LIMIT,
   MULT_MAX_TENTHS,
@@ -29,17 +30,21 @@ const RULES: { lead: string; text: string }[] = [
     lead: 'Place',
     text: `You hold ${HAND_SIZE} pieces at a time; drag any of them onto the board, or tap one and then tap its spot. The right spot locks it in and a new piece from the deck takes its place. A wrong spot is a miss. Dropping it off the board just puts it back.`,
   },
-  {
-    lead: 'Hold',
-    text: 'Drag a piece onto the Hold slot (or tap it, then Hold) to set it aside and draw a new one. Once per placement; holding when a piece is already there swaps them. You can play the held piece straight from the slot.',
-  },
+  ...(HOLD_SLOT
+    ? [
+        {
+          lead: 'Hold',
+          text: 'Drag a piece onto the Hold slot (or tap it, then Hold) to set it aside and draw a new one. Once per placement; holding when a piece is already there swaps them. You can play the held piece straight from the slot.',
+        },
+      ]
+    : []),
   {
     lead: 'Islands and snaps',
     text: `A piece with no neighbours on the board yet is an island: ${ISLAND_POINTS} points, but a guess. A piece touching one that's already placed is a snap: ${SNAP_POINTS} points.`,
   },
   {
     lead: 'Score multiplier',
-    text: `Place a piece within ${seconds(FAST_MS)} seconds of your last one to raise the multiplier by ${tenths(MULT_STEP_TENTHS)}, up to ×${tenths(MULT_MAX_TENTHS)}. Go ${seconds(STALL_MS + DECAY_TICK_MS)} seconds without placing and it starts dropping; the timer in its box shows when. Each miss also costs ${tenths(WRONG_PENALTY_TENTHS)}.`,
+    text: `The ×1.0 to ×${tenths(MULT_MAX_TENTHS)} beside your score multiplies every placement's points. Place a piece within ${seconds(FAST_MS)} seconds of your last one to raise the multiplier by ${tenths(MULT_STEP_TENTHS)}, up to ×${tenths(MULT_MAX_TENTHS)}. Go ${seconds(STALL_MS + DECAY_TICK_MS)} seconds without placing and it starts dropping; the countdown beside the meter shows when. Each miss also costs ${tenths(WRONG_PENALTY_TENTHS)}.`,
   },
   {
     lead: 'Pulse',

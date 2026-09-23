@@ -11,6 +11,12 @@ export const PAD = 18; // margin drawn around each cell so tabs and outlines are
 // Pieces you can play from at once. Keep it small: a full tray brings back the cramped-pieces problem.
 export const HAND_SIZE = 3;
 
+// Whether the game offers the hold slot. Off while playtesting a plain hand of 3 (simpler, and
+// bigger pieces on phones; simulated, it forces about as many islands as a hand of 2 + hold).
+// The engine's hold rules (`holdPiece`, `canHold`) stay in place and tested, so turning it back on
+// is just this flag.
+export const HOLD_SLOT = false;
+
 // How long the finished photo is shown before play starts.
 export const FLASH_MS = 10000;
 

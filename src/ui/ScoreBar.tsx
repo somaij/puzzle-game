@@ -18,7 +18,7 @@ type Props = {
    * to the first decay step. Null hides it, e.g. at 1.0× where there is nothing left to lose.
    */
   decayCountdown: { from: number; until: number } | null;
-  /** Narrow screens: score and misses on one row, the multiplier full width below. */
+  /** Narrow screens: the score box full width, misses as one slim row below it. */
   compact: boolean;
 };
 
@@ -32,7 +32,7 @@ const MISSES_LOW = 3;
 /** 12345 → "12,345" without relying on Intl, which not every JS engine ships in full. */
 export const withCommas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
-/** Score, score multiplier (with its level meter and the countdown to it dropping), and misses left. */
+/** Score with its multiplier (level meter and the countdown to it dropping) in one box, and misses left. */
 export function ScoreBar({ score, multTenths, missesLeft, missFlash, decayCountdown, compact }: Props) {
   const level = (multTenths - MULT_MIN_TENTHS) / (MULT_MAX_TENTHS - MULT_MIN_TENTHS);
 
@@ -64,17 +64,48 @@ export function ScoreBar({ score, multTenths, missesLeft, missFlash, decayCountd
   };
   const redValue = { color: flash.interpolate({ inputRange: [0, 1], outputRange: [colors.gold, colors.bad] }) };
 
+  // Score and multiplier share one box: the multiplier is what the next placement's points are
+  // multiplied by, so it sits right beside the score, with its meter and countdown.
   const scoreBox = (
-    <View style={styles.box}>
-      <Text style={styles.label}>Score</Text>
-      <Text testID="score" style={styles.score}>
-        {withCommas(score)}
-      </Text>
-    </View>
+    <Animated.View
+      testID="multiplier-box"
+      style={[styles.box, styles.scoreBox, styles.grow, multLost > 0 && [redBorder, shake]]}
+    >
+      <View style={styles.scoreHead}>
+        <Text style={styles.label}>Score</Text>
+        <View style={styles.valueGroup}>
+          {multLost > 0 && (
+            <Animated.Text testID="multiplier-lost" style={[styles.lost, { opacity: flash }]}>
+              −{(multLost / 10).toFixed(1)}
+            </Animated.Text>
+          )}
+          <Animated.Text
+            testID="multiplier"
+            accessibilityLabel={`Score multiplier ${(multTenths / 10).toFixed(1)}`}
+            style={[styles.multiplier, multLost > 0 && redValue]}
+          >
+            ×{(multTenths / 10).toFixed(1)}
+          </Animated.Text>
+        </View>
+      </View>
+      <View style={styles.meterRow}>
+        <Text testID="score" style={styles.score}>
+          {withCommas(score)}
+        </Text>
+        <View style={[styles.meter, styles.grow]}>
+          <View style={[styles.meterFill, { width: `${level * 100}%` }]} />
+        </View>
+        {/* Fixed width, so the meter doesn't jump when the seconds appear or disappear. */}
+        <View style={styles.secondsSlot}>
+          {decayCountdown && <DecaySeconds key={decayCountdown.until} until={decayCountdown.until} />}
+        </View>
+      </View>
+      {decayCountdown && <DecayTimer from={decayCountdown.from} until={decayCountdown.until} />}
+    </Animated.View>
   );
 
   const missesBox = (
-    <Animated.View style={[styles.box, compact && styles.grow, redBorder]}>
+    <Animated.View style={[styles.box, compact ? styles.missesBoxCompact : styles.missesBox, redBorder]}>
       <Text style={styles.label}>Misses left</Text>
       {/* The number says it outright; the pips are the same count at a glance, a used one goes dim. */}
       <View testID="misses-left" accessibilityLabel={`${missesLeft} of ${MISS_LIMIT} misses left`} style={styles.missesRow}>
@@ -91,55 +122,15 @@ export function ScoreBar({ score, multTenths, missesLeft, missFlash, decayCountd
     </Animated.View>
   );
 
-  const multiplierBox = (
-    <Animated.View
-      testID="multiplier-box"
-      style={[styles.box, styles.multiplierBox, !compact && styles.grow, multLost > 0 && [redBorder, shake]]}
-    >
-      <View style={styles.multiplierHead}>
-        <Text style={styles.label}>Score multiplier</Text>
-        <View style={styles.valueGroup}>
-          {multLost > 0 && (
-            <Animated.Text testID="multiplier-lost" style={[styles.lost, { opacity: flash }]}>
-              −{(multLost / 10).toFixed(1)}
-            </Animated.Text>
-          )}
-          <Animated.Text testID="multiplier" style={[styles.multiplier, multLost > 0 && redValue]}>
-            ×{(multTenths / 10).toFixed(1)}
-          </Animated.Text>
-        </View>
-      </View>
-      <View style={styles.meterRow}>
-        <View style={[styles.meter, styles.grow]}>
-          <View style={[styles.meterFill, { width: `${level * 100}%` }]} />
-        </View>
-        {/* Fixed width, so the meter doesn't jump when the seconds appear or disappear. */}
-        <View style={styles.secondsSlot}>
-          {decayCountdown && <DecaySeconds key={decayCountdown.until} until={decayCountdown.until} />}
-        </View>
-      </View>
-      {decayCountdown && <DecayTimer from={decayCountdown.from} until={decayCountdown.until} />}
-    </Animated.View>
-  );
-
-  return compact ? (
-    <View style={styles.stack}>
-      <View style={styles.row}>
-        {scoreBox}
-        {missesBox}
-      </View>
-      {multiplierBox}
-    </View>
-  ) : (
-    <View style={styles.row}>
+  return (
+    <View style={compact ? styles.stack : styles.row}>
       {scoreBox}
-      {multiplierBox}
       {missesBox}
     </View>
   );
 }
 
-/** A line along the bottom of the multiplier box that drains until the multiplier starts dropping; placing a piece refills it. */
+/** A line along the bottom of the score box that drains until the multiplier starts dropping; placing a piece refills it. */
 function DecayTimer({ from, until }: { from: number; until: number }) {
   const [left] = useState(() => new Animated.Value(1));
   useEffect(() => {
@@ -190,14 +181,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   grow: { flex: 1 },
-  multiplierBox: { gap: 6, paddingBottom: 10, overflow: 'hidden' },
-  multiplierHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
+  scoreBox: { gap: 4, paddingBottom: 10, overflow: 'hidden' },
+  scoreHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
+  missesBox: { width: 230 },
+  missesBoxCompact: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   valueGroup: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   label: { color: colors.muted, fontSize: 10, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
   score: { color: colors.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
   multiplier: { color: colors.gold, fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
   lost: { color: colors.bad, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  meterRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  meterRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   meter: { height: 7, borderRadius: 4, backgroundColor: colors.goldSoft, overflow: 'hidden' },
   meterFill: { height: '100%', borderRadius: 4, backgroundColor: colors.gold },
   secondsSlot: { width: 34, alignItems: 'flex-end' },

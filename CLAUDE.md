@@ -10,7 +10,7 @@ with Expo so an Android (and iOS) app can later be built from the same code.
 Working title only; a plain, descriptive final name is still open (the POC used
 "Blind Cut" / "PulsePuzzle", and neither is final).
 
-The core idea: pieces are fed from a small **hand of 3** (with a hold slot)
+The core idea: pieces are fed from a small **hand of 3** (a hold slot is built but switched off)
 rather than dumped in a tray. You drag any hand piece
 onto a bare board and it locks into place, interlocking with its neighbours to
 build the picture. Scoring rewards a **risk/flow** loop layered on top of an
@@ -26,7 +26,7 @@ that makes jigsaws from *your own photos*, sold as a one-time purchase.
 ## Status
 
 Checkpoints 1–3 done: the daily puzzle is playable and scored on web.
-A 10 s photo preview at the start, a hand of 3 with a hold slot, drag- or tap-to-place
+A 10 s photo preview at the start, a hand of 3 (hold slot switched off), drag- or tap-to-place
 (mouse and touch),
 island/snap scoring, score multiplier with fast bonus, stall decay and a
 countdown to the next drop, pulse ghosts, and a 12-miss limit (win on all 24
@@ -86,7 +86,16 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   so taking the 100-point island gamble becomes a choice. **Keep the hand
   small**: growing it toward a full tray brings back the cramped-pieces
   problem this design avoids.
-- A **hold** slot: drag a hand piece onto it to stash it (once per
+- **Hold is switched off** (`HOLD_SLOT = false` in `constants.ts`) while
+  playtesting a plain hand of 3: fewer rules, and on phones the 3 slots fill
+  the row (~106 px, up from ~78 px). Only the UI checks the flag; the engine's
+  hold rules below stay in place and tested, so flipping it brings hold back.
+  Simulated over 500 daily deals with greedy play, "forced islands" per game
+  (turns with no snap in hand, after the first piece): hand 3 + hold 2.25,
+  hand 3 alone 2.91, hand 2 + hold 2.88, hand 2 alone 3.72, the POC's
+  1 + hold 3.75. So hand 3 alone plays like 2 + hold with fewer rules, and a
+  hand of 2 alone would bring back the POC's forced guessing.
+- A **hold** slot (when on): drag a hand piece onto it to stash it (once per
   placement). Holding into an empty slot refills the hand from the deck;
   holding with a piece already held swaps them. The held piece can be
   **played straight from the slot**, so holding the last piece can't lock the
@@ -125,9 +134,13 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   - **Island** = placed with no already-placed orthogonal neighbour. Hard, a
     real read/gamble. Base **100**.
   - **Snap** = touches at least one placed piece. Easier, deducible. Base **25**.
-- *Tempo axis (the flow multiplier, shown to players as "Score multiplier"):*
+- *Tempo axis (the flow multiplier, shown to players as "×1.3" beside the score):*
   - Range **1.0×–1.5×**. Starts at 1.0.
-  - The multiplier box shows the level (gold meter) and **the time until the
+  - **Score and multiplier share one box** (simpler than two): "Score" and the
+    value on the left, the multiplier ("×1.3") top right, and its gold meter
+    running beside the score value. Misses left is its own slim box below
+    (on wide screens, beside it).
+  - That box shows the level (gold meter) and **the time until the
     multiplier drops**, both as seconds beside the meter ("3.2s", tenths,
     rounded up; "0.0s" in red while it is dropping) and as a line along the
     box's bottom edge. Both run from the last placement to the first decay
@@ -163,7 +176,7 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   the number just changed quietly). On a miss: "MISS" rises in red from the
   cell, plus "−0.1×" when the multiplier actually dropped (`dropPiece` returns
   `miss.multLostTenths`, 0 at 1.0×). The misses box border flashes red; if the
-  multiplier dropped, its box also flashes red, shakes, turns the value red and
+  multiplier dropped, the score box also flashes red, shakes, turns the value red and
   shows "−0.1" beside it. Red holds 0.3 s, then fades over 0.7 s.
 
 **Pulse (the assist reward)**

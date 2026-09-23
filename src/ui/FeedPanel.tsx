@@ -10,6 +10,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { HOLD_SLOT } from '../engine/constants';
 import { rowColOf, type Cut } from '../engine/cuts';
 import { colors } from './colors';
 import { PieceSvg } from './PieceSvg';
@@ -42,12 +43,14 @@ type Props = {
 };
 
 const SIDE_SLOT = 100;
+/** On narrow screens the slots share the row's width, up to this size. */
+const COMPACT_SLOT_MAX = 120;
 const COMPACT_GAP = 8;
 const COMPACT_PADDING = 10;
 
-/** Slot size that fits the three hand slots and hold in one compact row. */
-function compactSlot(width: number) {
-  return Math.min(SIDE_SLOT, Math.floor((width - 2 * (COMPACT_PADDING + 1) - 3 * COMPACT_GAP) / 4));
+/** Slot size that fits the hand slots (and hold, if on) in one compact row. */
+function compactSlot(width: number, slots: number) {
+  return Math.min(COMPACT_SLOT_MAX, Math.floor((width - 2 * (COMPACT_PADDING + 1) - (slots - 1) * COMPACT_GAP) / slots));
 }
 
 // Web only: stop the browser scrolling, zooming or selecting text when a piece is dragged.
@@ -73,7 +76,7 @@ export function FeedPanel(props: Props) {
     compactWidth,
   } = props;
   const compact = compactWidth !== undefined;
-  const size = compact ? compactSlot(compactWidth) : SIDE_SLOT;
+  const size = compact ? compactSlot(compactWidth, hand.length + (HOLD_SLOT ? 1 : 0)) : SIDE_SLOT;
 
   const slotContent = (piece: number | null) => {
     if (piece === null || !showPieces) return null;
@@ -110,23 +113,25 @@ export function FeedPanel(props: Props) {
           </View>
         ))}
         {/* Tapping the piece inside goes to its own handlers; this catches taps on an empty slot. */}
-        <Pressable
-          ref={holdRef}
-          testID="hold-slot"
-          accessibilityLabel="Hold"
-          onPress={onHoldPress}
-          style={[
-            styles.slot,
-            styles.holdSlot,
-            { width: size, height: size },
-            holdHovered && canHold && styles.holdHovered,
-            hold !== null && hold === selected && styles.selected,
-          ]}
-        >
-          {slotContent(hold)}
-          {/* After the piece, so a held piece doesn't cover it. */}
-          <Text style={[styles.holdTag, !canHold && styles.dimmed]}>Hold</Text>
-        </Pressable>
+        {HOLD_SLOT && (
+          <Pressable
+            ref={holdRef}
+            testID="hold-slot"
+            accessibilityLabel="Hold"
+            onPress={onHoldPress}
+            style={[
+              styles.slot,
+              styles.holdSlot,
+              { width: size, height: size },
+              holdHovered && canHold && styles.holdHovered,
+              hold !== null && hold === selected && styles.selected,
+            ]}
+          >
+            {slotContent(hold)}
+            {/* After the piece, so a held piece doesn't cover it. */}
+            <Text style={[styles.holdTag, !canHold && styles.dimmed]}>Hold</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -146,7 +151,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   label: { color: colors.muted, fontSize: 11, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
   deckCount: { color: colors.muted, fontSize: 12, fontVariant: ['tabular-nums'] },
-  slots: { flexDirection: 'row', flexWrap: 'wrap' },
+  slots: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   slot: { alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   handSlot: { backgroundColor: colors.board, borderColor: 'transparent', borderWidth: 2 },
   selected: { borderColor: colors.accent, borderWidth: 2, borderStyle: 'solid' },
