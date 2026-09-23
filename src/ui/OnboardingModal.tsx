@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { MISS_LIMIT } from '../engine/constants';
+import { FLASH_MS, MISS_LIMIT } from '../engine/constants';
 import { colors } from './colors';
 
 type Props = { visible: boolean; onDismiss: () => void };
@@ -18,10 +18,10 @@ export function OnboardingModal({ visible, onDismiss }: Props) {
           Welcome
         </Text>
         <Text style={styles.body}>
-          Rebuild today&rsquo;s photo, one piece at a time. There&rsquo;s no reference picture, so read each
-          piece&rsquo;s image and cut to work out where it goes. Fast, correct placements raise your score
-          multiplier; a wrong spot costs one of your {MISS_LIMIT} misses. Full rules are always below the
-          board.
+          Rebuild today&rsquo;s photo. You&rsquo;ll see it for {FLASH_MS / 1000} seconds, then it hides: read
+          each piece&rsquo;s image and cut to work out where it goes. Drag any piece from your hand onto the
+          board. Quick, correct placements raise your score multiplier; a wrong spot costs one of your{' '}
+          {MISS_LIMIT} misses. Full rules are always below the board.
         </Text>
         <Pressable style={styles.button} onPress={onDismiss}>
           <Text style={styles.buttonText}>Start playing</Text>

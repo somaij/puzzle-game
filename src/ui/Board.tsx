@@ -1,4 +1,4 @@
-import { useEffect, useState, type Ref } from 'react';
+import { useEffect, useState, type ReactNode, type Ref } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View, type ImageSourcePropType, type TextStyle } from 'react-native';
 
 import { COLS, ROWS } from '../engine/constants';
@@ -27,6 +27,8 @@ type Props = {
   wrongCell: number | null;
   /** Attached to the exact-size play area, for measuring its position on screen. */
   ref?: Ref<View>;
+  /** Drawn over the play area, clipped to it (the photo preview). */
+  children?: ReactNode;
 };
 
 const nativeDriver = Platform.OS !== 'web';
@@ -39,7 +41,7 @@ const textShadow = Platform.select<TextStyle>({
 });
 
 /** The bare assembly area. Only placed pieces (and pulse ghosts) are drawn; the grid itself stays hidden. */
-export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width, hoverCell, wrongCell, ref }: Props) {
+export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width, hoverCell, wrongCell, ref, children }: Props) {
   const playWidth = width - 2 * FRAME_BORDER;
   const cell = playWidth / COLS;
   const pieceAt = (i: number) => {
@@ -56,6 +58,7 @@ export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width,
         {cuts.map((cut, i) => (placed[i] ? <PlacedPiece key={i} {...pieceAt(i)} cut={cut} image={image} /> : null))}
         {hoverCell !== null && !placed[hoverCell] && <CellOutline index={hoverCell} cell={cell} style={styles.hover} />}
         {wrongCell !== null && <CellOutline index={wrongCell} cell={cell} style={styles.wrong} />}
+        {children}
       </View>
       {/* Outside the clipped play area, so text over the top row can rise above the board. */}
       {floats.map((f) => (

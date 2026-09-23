@@ -1,140 +1,177 @@
 import { indexOf } from '../cuts';
-import { MISS_LIMIT, PIECE_COUNT, PULSE_MS } from '../constants';
+import { DECAY_TICK_MS, FAST_MS, HAND_SIZE, MISS_LIMIT, PIECE_COUNT, PULSE_MS, STALL_MS } from '../constants';
 import { createPuzzle, type Puzzle } from '../daily';
 import {
   canHold,
-  currentPiece,
   decayStartsAt,
   dropPiece,
   holdPiece,
   isIsland,
+  isPlayable,
   missesLeft,
   newGame,
   pointsFor,
   tick,
-  upcomingPieces,
   type GameState,
 } from '../game';
 
 const puzzle = createPuzzle(1);
+/** Idle time until the multiplier first drops. */
+const FIRST_DROP = STALL_MS + DECAY_TICK_MS;
 const { order } = puzzle;
 
 /** Same cuts, but pieces dealt in a chosen order. */
 const dealtInOrder = (deal: number[]): Puzzle => ({ number: 0, cuts: puzzle.cuts, order: deal });
-/** Row by row from the top-left: piece 0 is an island, every later piece snaps. */
+/** Row by row from the top-left: piece 0 is an island, and played in number order every later piece snaps. */
 const rowMajor = dealtInOrder(Array.from({ length: PIECE_COUNT }, (_, i) => i));
 
-/** Drop the current piece on its own cell at time `now`. */
-function placeCurrent(state: GameState, now = 0): GameState {
-  const { state: next, result } = dropPiece(state, currentPiece(state), now);
+/** Drop `piece` on its own cell at time `now`. */
+function place(state: GameState, piece: number, now = 0): GameState {
+  const { state: next, result } = dropPiece(state, piece, piece, now);
   expect(result).toBe('placed');
   return next;
 }
 
-/** Any empty cell that isn't the current piece's. */
-function wrongCell(state: GameState): number {
-  return state.placed.findIndex((filled, i) => !filled && i !== currentPiece(state));
+/** Place the lowest-numbered playable piece (in rowMajor, the next one row by row). */
+function placeLowest(state: GameState, now = 0): GameState {
+  const playable = [...state.hand, state.hold].filter((p): p is number => p !== null);
+  return place(state, Math.min(...playable), now);
+}
+
+/** Any empty cell that isn't `piece`'s. */
+function wrongCell(state: GameState, piece: number): number {
+  return state.placed.findIndex((filled, i) => !filled && i !== piece);
 }
 
 describe('dealing', () => {
-  it('deals in the puzzle order with the next three previewed', () => {
+  it(`deals a hand of ${HAND_SIZE} in the puzzle order`, () => {
     const game = newGame(puzzle, 0);
-    expect(currentPiece(game)).toBe(order[0]);
-    expect(upcomingPieces(game)).toEqual(order.slice(1, 4));
+    expect(game.hand).toEqual(order.slice(0, HAND_SIZE));
+    expect(game.deck).toEqual(order.slice(HAND_SIZE));
     expect(game.placedCount).toBe(0);
   });
 
   it('does not change the puzzle it was dealt from', () => {
     const before = [...order];
-    placeCurrent(newGame(puzzle, 0));
+    place(newGame(puzzle, 0), order[0]);
     expect(puzzle.order).toEqual(before);
   });
 });
 
 describe('dropPiece', () => {
-  it('locks the piece in on its own cell and deals the next', () => {
-    const game = placeCurrent(newGame(puzzle, 0));
-    expect(game.placed[order[0]]).toBe(true);
+  it('plays any hand piece and refills its slot from the deck', () => {
+    const game = place(newGame(puzzle, 0), order[1]);
+    expect(game.placed[order[1]]).toBe(true);
     expect(game.placedCount).toBe(1);
-    expect(currentPiece(game)).toBe(order[1]);
+    expect(game.hand).toEqual([order[0], order[3], order[2]]);
+    expect(game.deck).toEqual(order.slice(4));
   });
 
-  it('keeps the same piece after a wrong cell', () => {
+  it('keeps the hand as it was after a wrong cell', () => {
     const game = newGame(puzzle, 0);
-    const { state, result } = dropPiece(game, wrongCell(game), 0);
+    const { state, result } = dropPiece(game, order[2], wrongCell(game, order[2]), 0);
     expect(result).toBe('wrong');
-    expect(currentPiece(state)).toBe(order[0]);
+    expect(state.hand).toEqual(game.hand);
     expect(state.placedCount).toBe(0);
   });
 
   it('returns quietly when dropped off the board or on a filled cell', () => {
-    const game = placeCurrent(newGame(puzzle, 0));
+    const game = place(newGame(puzzle, 0), order[0]);
     for (const cell of [null, -1, PIECE_COUNT, order[0]]) {
-      const { state, result } = dropPiece(game, cell, 0);
+      const { state, result } = dropPiece(game, order[1], cell, 0);
       expect(result).toBe('returned');
       expect(state).toBe(game);
     }
   });
+
+  it('ignores pieces that are not in the hand or hold', () => {
+    const game = newGame(puzzle, 0);
+    const notDealt = order[HAND_SIZE];
+    expect(isPlayable(game, notDealt)).toBe(false);
+    expect(dropPiece(game, notDealt, notDealt, 0).result).toBe('returned');
+  });
 });
 
 describe('holdPiece', () => {
-  it('stashes the current piece and deals the next', () => {
-    const game = holdPiece(newGame(puzzle, 0), 0);
-    expect(game.hold).toBe(order[0]);
-    expect(currentPiece(game)).toBe(order[1]);
+  it('moves a hand piece to hold and refills its slot from the deck', () => {
+    const game = holdPiece(newGame(puzzle, 0), order[1], 0);
+    expect(game.hold).toBe(order[1]);
+    expect(game.hand).toEqual([order[0], order[3], order[2]]);
   });
 
-  it('can only be used once per piece', () => {
-    const game = holdPiece(newGame(puzzle, 0), 0);
+  it('can only be used once per placement', () => {
+    const game = holdPiece(newGame(puzzle, 0), order[0], 0);
     expect(canHold(game)).toBe(false);
-    expect(holdPiece(game, 0)).toBe(game);
+    expect(holdPiece(game, order[1], 0)).toBe(game);
   });
 
-  it('is available again after a placement, and swaps the held piece back in', () => {
-    let game = placeCurrent(holdPiece(newGame(puzzle, 0), 0)); // holds order[0], places order[1]
+  it('swaps with the held piece once available again', () => {
+    // Hold order[0] (order[3] fills its slot), then place order[1] (order[4] fills its slot).
+    let game = place(holdPiece(newGame(puzzle, 0), order[0], 0), order[1]);
     expect(canHold(game)).toBe(true);
-    game = holdPiece(game, 0); // swaps order[2] for order[0]
-    expect(currentPiece(game)).toBe(order[0]);
+    game = holdPiece(game, order[2], 0);
     expect(game.hold).toBe(order[2]);
+    expect(game.hand).toEqual([order[3], order[4], order[0]]);
+    expect(game.deck).toEqual(order.slice(5));
   });
 
   it('is not made available again by a wrong drop', () => {
-    const held = holdPiece(newGame(puzzle, 0), 0);
-    const { state } = dropPiece(held, wrongCell(held), 0);
+    const held = holdPiece(newGame(puzzle, 0), order[0], 0);
+    const { state } = dropPiece(held, order[1], wrongCell(held, order[1]), 0);
     expect(canHold(state)).toBe(false);
+  });
+
+  it('keeps the held piece playable from the hold slot', () => {
+    let game = holdPiece(newGame(puzzle, 0), order[0], 0);
+    expect(isPlayable(game, order[0])).toBe(true);
+    game = place(game, order[0]);
+    expect(game.hold).toBeNull();
+    expect(game.hand).toEqual([order[3], order[1], order[2]]); // playing from hold deals nothing
+  });
+
+  it('ignores pieces not in the hand', () => {
+    const game = newGame(puzzle, 0);
+    expect(holdPiece(game, order[HAND_SIZE], 0)).toBe(game);
   });
 });
 
 describe('end of deck', () => {
-  it('deals the held piece last and wins with all pieces placed', () => {
-    let game = holdPiece(newGame(puzzle, 0), 0);
-    while (game.status === 'playing') game = placeCurrent(game);
-    expect(game.status).toBe('won');
-    expect(game.placedCount).toBe(PIECE_COUNT);
-    expect(game.placed.every(Boolean)).toBe(true);
-    expect(game.hold).toBeNull();
-  });
-
-  it('does not win while a piece is still held', () => {
-    let game = holdPiece(newGame(puzzle, 0), 0);
-    for (let i = 0; i < PIECE_COUNT - 1; i++) game = placeCurrent(game);
+  it('empties hand slots once the deck runs out, and wins with all pieces placed', () => {
+    let game = newGame(rowMajor, 0);
+    for (let i = 0; i < PIECE_COUNT - 1; i++) game = placeLowest(game);
+    expect(game.deck).toEqual([]);
+    expect(game.hand.filter((p) => p !== null)).toEqual([PIECE_COUNT - 1]);
     expect(game.status).toBe('playing');
-    expect(currentPiece(game)).toBe(order[0]);
+    game = placeLowest(game);
+    expect(game.status).toBe('won');
+    expect(game.hand).toEqual([null, null, null]);
   });
 
-  it('refuses to hold the last piece into an empty slot', () => {
-    let game = newGame(puzzle, 0);
-    for (let i = 0; i < PIECE_COUNT - 1; i++) game = placeCurrent(game);
-    expect(canHold(game)).toBe(false);
-    expect(holdPiece(game, 0)).toBe(game);
+  it('does not win while a piece is still held, and it can be played last', () => {
+    let game = holdPiece(newGame(rowMajor, 0), 0, 0);
+    // Place everything but the held piece, highest first so the hand never needs piece 0.
+    while (game.hand.some((p) => p !== null)) {
+      game = place(game, Math.max(...game.hand.filter((p): p is number => p !== null)));
+    }
+    expect(game.placedCount).toBe(PIECE_COUNT - 1);
+    expect(game.status).toBe('playing');
+    game = place(game, 0);
+    expect(game.status).toBe('won');
+  });
+
+  it('allows holding the last hand piece, since it can still be played from hold', () => {
+    let game = newGame(rowMajor, 0);
+    for (let i = 0; i < PIECE_COUNT - 1; i++) game = placeLowest(game);
+    game = holdPiece(game, PIECE_COUNT - 1, 0);
+    expect(game.hold).toBe(PIECE_COUNT - 1);
+    expect(place(game, PIECE_COUNT - 1).status).toBe('won');
   });
 
   it('ignores drops and holds once won', () => {
-    let game = newGame(puzzle, 0);
-    while (game.status === 'playing') game = placeCurrent(game);
-    expect(currentPiece(game)).toBeNull();
-    expect(dropPiece(game, 0, 0).result).toBe('returned');
-    expect(holdPiece(game, 0)).toBe(game);
+    let game = newGame(rowMajor, 0);
+    while (game.status === 'playing') game = placeLowest(game);
+    expect(dropPiece(game, 0, 0, 0).result).toBe('returned');
+    expect(holdPiece(game, 0, 0)).toBe(game);
   });
 });
 
@@ -149,34 +186,35 @@ describe('scoring', () => {
 
   it('scores an island 100 and a snap 25 at 1.0×', () => {
     let game = newGame(rowMajor, 0);
-    const first = dropPiece(game, 0, 5000); // slow: no fast bonus
+    const first = dropPiece(game, 0, 0, 5000); // slow: no fast bonus
     expect(first.placement).toMatchObject({ island: true, fast: false, points: 100, pulse: true });
     game = first.state;
-    const second = dropPiece(game, 1, 10_000);
+    const second = dropPiece(game, 1, 1, 10_000);
     expect(second.placement).toMatchObject({ island: false, fast: false, points: 25, pulse: false });
     expect(second.state.score).toBe(125);
     expect(second.state.moves).toEqual(['island', 'snap']);
   });
 
   it('pays a fast placement at the raised multiplier', () => {
-    const { state, placement } = dropPiece(newGame(rowMajor, 0), 0, 3500);
+    const { state, placement } = dropPiece(newGame(rowMajor, 0), 0, 0, FAST_MS);
     expect(placement).toMatchObject({ fast: true, points: 110 });
     expect(state.multTenths).toBe(11);
   });
 
   it('caps the multiplier at 1.5×', () => {
     let game = newGame(rowMajor, 0);
-    for (let i = 0; i < 8; i++) game = placeCurrent(game, i * 100);
+    for (let i = 0; i < 8; i++) game = placeLowest(game, i * 100);
     expect(game.multTenths).toBe(15);
-    expect(dropPiece(game, 8, 900).placement?.points).toBe(38);
+    expect(dropPiece(game, 8, 8, 900).placement?.points).toBe(38);
   });
 
-  it('labels the current piece island or snap from what is already placed', () => {
+  it('decides island or snap from what is already placed, whichever hand piece is played', () => {
     let game = newGame(rowMajor, 0);
     expect(isIsland(game, 1)).toBe(true);
-    game = placeCurrent(game);
+    game = place(game, 0);
     expect(isIsland(game, 1)).toBe(false); // touches piece 0
     expect(isIsland(game, 7)).toBe(true); // diagonal to piece 0 only
+    expect(dropPiece(game, 2, 2, 0).placement?.island).toBe(true); // hand is 3, 1, 2: skipping 1 leaves 2 an island
   });
 });
 
@@ -184,22 +222,22 @@ describe('flow decay', () => {
   /** Four fast placements from t=0 to t=300: multiplier 1.4×, last placement at t=300. */
   const flowing = () => {
     let game = newGame(rowMajor, 0);
-    for (let i = 0; i < 4; i++) game = placeCurrent(game, i * 100);
+    for (let i = 0; i < 4; i++) game = placeLowest(game, i * 100);
     expect(game.multTenths).toBe(14);
     return game;
   };
 
   it('starts one tick after the stall grace, then drops 0.1× per tick', () => {
     const game = flowing();
-    expect(tick(game, 300 + 4999).multTenths).toBe(14);
-    expect(tick(game, 300 + 5000).multTenths).toBe(13);
-    expect(tick(game, 300 + 6000).multTenths).toBe(12);
-    expect(tick(tick(game, 300 + 5000), 300 + 6000).multTenths).toBe(12); // same result tick by tick
+    expect(tick(game, 300 + FIRST_DROP - 1).multTenths).toBe(14);
+    expect(tick(game, 300 + FIRST_DROP).multTenths).toBe(13);
+    expect(tick(game, 300 + FIRST_DROP + DECAY_TICK_MS).multTenths).toBe(12);
+    expect(tick(tick(game, 300 + FIRST_DROP), 300 + FIRST_DROP + DECAY_TICK_MS).multTenths).toBe(12); // same result tick by tick
   });
 
   it('starts exactly when decayStartsAt says', () => {
     const game = flowing();
-    expect(decayStartsAt(game)).toBe(300 + 5000);
+    expect(decayStartsAt(game)).toBe(300 + FIRST_DROP);
     expect(tick(game, decayStartsAt(game) - 1).multTenths).toBe(14);
     expect(tick(game, decayStartsAt(game)).multTenths).toBe(13);
   });
@@ -209,40 +247,47 @@ describe('flow decay', () => {
   });
 
   it('is applied before a late placement is scored', () => {
-    const { state } = dropPiece(flowing(), 4, 300 + 6000);
+    const { state } = dropPiece(flowing(), 4, 4, 300 + FIRST_DROP + DECAY_TICK_MS);
     expect(state.multTenths).toBe(12);
   });
 
   it('is not reset by a hold or a miss, only by a placement', () => {
-    let game = flowing();
-    game = holdPiece(game, 300 + 3000);
-    game = dropPiece(game, wrongCell(game), 300 + 4500).state; // miss: −0.1×
+    let game = flowing(); // hand: 4, 5, 6
+    game = holdPiece(game, 5, 300 + 3000);
+    game = dropPiece(game, 4, wrongCell(game, 4), 300 + 4500).state; // miss: −0.1×
     expect(game.multTenths).toBe(13);
-    expect(tick(game, 300 + 5000).multTenths).toBe(12);
+    expect(tick(game, 300 + FIRST_DROP).multTenths).toBe(12);
   });
 });
 
 describe('fast window', () => {
-  it('restarts after a hold', () => {
-    const game = holdPiece(newGame(rowMajor, 0), 3000);
-    expect(dropPiece(game, 1, 6000).placement?.fast).toBe(true);
+  it('counts from the previous placement', () => {
+    const game = place(newGame(rowMajor, 0), 0, 5000); // slow
+    expect(dropPiece(game, 1, 1, 5000 + FAST_MS).placement?.fast).toBe(true);
+    expect(dropPiece(game, 1, 1, 5000 + FAST_MS + 1).placement?.fast).toBe(false);
   });
 
-  it('restarts after a miss', () => {
-    const game = dropPiece(newGame(rowMajor, 0), 5, 3000).state;
-    expect(dropPiece(game, 0, 6000).placement?.fast).toBe(true);
+  it('counts the first placement from the start of the game', () => {
+    expect(dropPiece(newGame(rowMajor, 1000), 0, 0, 1000 + FAST_MS).placement?.fast).toBe(true);
+    expect(dropPiece(newGame(rowMajor, 1000), 0, 0, 1000 + FAST_MS + 1).placement?.fast).toBe(false);
+  });
+
+  it('is not restarted by a hold or a miss', () => {
+    let game = holdPiece(newGame(rowMajor, 0), 2, 3000);
+    game = dropPiece(game, 0, 5, 3400).state;
+    expect(dropPiece(game, 0, 0, FAST_MS + 1).placement?.fast).toBe(false);
   });
 });
 
 describe('misses', () => {
   it('cost a miss and 0.1× flow, but never below 1.0×, and report what was lost', () => {
-    let game = placeCurrent(newGame(rowMajor, 0), 100); // 1.1×
-    const first = dropPiece(game, 10, 200);
+    let game = place(newGame(rowMajor, 0), 0, 100); // 1.1×
+    const first = dropPiece(game, 1, 10, 200);
     expect(first.miss).toEqual({ cell: 10, multLostTenths: 1 });
     game = first.state;
     expect(game.multTenths).toBe(10);
     expect(missesLeft(game)).toBe(MISS_LIMIT - 1);
-    const second = dropPiece(game, 10, 300);
+    const second = dropPiece(game, 1, 10, 300);
     expect(second.miss).toEqual({ cell: 10, multLostTenths: 0 });
     game = second.state;
     expect(game.multTenths).toBe(10);
@@ -251,13 +296,13 @@ describe('misses', () => {
 
   it(`end the game on the ${MISS_LIMIT}th`, () => {
     let game = newGame(rowMajor, 0);
-    for (let i = 1; i < MISS_LIMIT; i++) game = dropPiece(game, 10, i).state;
+    for (let i = 1; i < MISS_LIMIT; i++) game = dropPiece(game, 0, 10, i).state;
     expect(game.status).toBe('playing');
-    game = dropPiece(game, 10, MISS_LIMIT).state;
+    game = dropPiece(game, 0, 10, MISS_LIMIT).state;
     expect(game.status).toBe('failed');
     expect(missesLeft(game)).toBe(0);
-    expect(dropPiece(game, 0, 100).result).toBe('returned');
-    expect(holdPiece(game, 100)).toBe(game);
+    expect(dropPiece(game, 0, 0, 100).result).toBe('returned');
+    expect(holdPiece(game, 0, 100)).toBe(game);
   });
 });
 
@@ -266,28 +311,28 @@ describe('pulse', () => {
   const around = [0, 1, 2, 6, 8, 12, 13, 14]; // the 8 cells around (1,1)
 
   it('ghosts the empty cells around a correct island, including diagonals', () => {
-    const { state } = dropPiece(newGame(dealtInOrder([centre, ...around]), 0), centre, 1000);
+    const { state } = dropPiece(newGame(dealtInOrder([centre, ...around]), 0), centre, centre, 1000);
     expect(state.ghosts.map((g) => g.cell).sort((a, b) => a - b)).toEqual(around);
     expect(state.ghosts.every((g) => g.until === 1000 + PULSE_MS)).toBe(true);
   });
 
   it('skips placed cells, and not on a snap', () => {
-    let game = placeCurrent(newGame(rowMajor, 0)); // piece 0 island: ghosts 1, 6, 7
+    let game = place(newGame(rowMajor, 0), 0); // piece 0 island: ghosts 1, 6, 7
     expect(game.ghosts.map((g) => g.cell).sort((a, b) => a - b)).toEqual([1, 6, 7]);
-    game = placeCurrent(game); // piece 1 is a snap: no new ghosts, its own ghost removed
+    game = place(game, 1); // piece 1 is a snap: no new ghosts, its own ghost removed
     expect(game.ghosts.map((g) => g.cell).sort((a, b) => a - b)).toEqual([6, 7]);
   });
 
   it('fades after PULSE_MS', () => {
-    const game = placeCurrent(newGame(rowMajor, 0), 1000);
+    const game = place(newGame(rowMajor, 0), 0, 1000);
     expect(tick(game, 1000 + PULSE_MS - 1).ghosts).toHaveLength(3);
     expect(tick(game, 1000 + PULSE_MS).ghosts).toHaveLength(0);
   });
 
   it('keeps the original timer when a ghost is pulsed again', () => {
     // Island at (0,0) ghosts (1,1); a later island at (0,2) would ghost (1,1) again.
-    let game = placeCurrent(newGame(dealtInOrder([0, 2, ...around]), 0), 0);
-    game = placeCurrent(game, 2000);
+    let game = place(newGame(dealtInOrder([0, 2, ...around]), 0), 0, 0);
+    game = place(game, 2, 2000);
     expect(game.ghosts.find((g) => g.cell === 7)?.until).toBe(PULSE_MS);
   });
 });

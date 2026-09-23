@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,19 +10,17 @@ import {
   type ImageSourcePropType,
 } from 'react-native';
 
-import { COLS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS } from '../engine/constants';
+import { COLS, FLASH_MS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS } from '../engine/constants';
 import { indexOf, rowColOf } from '../engine/cuts';
 import type { Puzzle } from '../engine/daily';
 import {
   canHold,
-  currentPiece,
   decayStartsAt,
   dropPiece,
   holdPiece,
   missesLeft,
   newGame,
   tick,
-  upcomingPieces,
   type Miss,
   type Placement,
 } from '../engine/game';
@@ -33,11 +30,18 @@ import { colors } from './colors';
 import { FeedPanel } from './FeedPanel';
 import { HowToPlay } from './HowToPlay';
 import { OnboardingModal } from './OnboardingModal';
+import { PhotoPreview } from './PhotoPreview';
 import { PieceSvg } from './PieceSvg';
 import { ScoreBar, withCommas } from './ScoreBar';
-import { usePieceDrag } from './usePieceDrag';
+import { usePieceDrag, type DropTarget } from './usePieceDrag';
 
-type Props = { puzzle: Puzzle; image: ImageSourcePropType };
+type Props = {
+  puzzle: Puzzle;
+  image: ImageSourcePropType;
+  /** Highest puzzle number the ‹ › buttons can switch to. */
+  lastPuzzle: number;
+  onSelectPuzzle: (n: number) => void;
+};
 
 type Rect = { x: number; y: number; width: number; height: number };
 
@@ -55,7 +59,7 @@ const ONBOARDING_KEY = 'onboarding-seen-v1';
 /** One monotonic clock for everything the engine times. */
 const now = () => performance.now();
 
-export function GameScreen({ puzzle, image }: Props) {
+export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props) {
   const [game, setGame] = useState(() => newGame(puzzle, now()));
   const [wrongCell, setWrongCell] = useState<number | null>(null);
   const wrongTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -70,6 +74,14 @@ export function GameScreen({ puzzle, image }: Props) {
     // the stall decay early, so give an untouched game's clocks a fresh start.
     setGame((g) => (g.placedCount === 0 && g.misses === 0 ? newGame(puzzle, now()) : g));
   };
+
+  // Each board opens with the finished photo, shown briefly (after the onboarding popup, if
+  // that's up). Play, and its clocks, start when it hides.
+  const [previewing, setPreviewing] = useState(true);
+  const endPreview = useCallback(() => {
+    setPreviewing(false);
+    setGame(newGame(puzzle, now()));
+  }, [puzzle]);
 
   // Flow decay and pulse fade depend on time passing, not just on moves.
   useEffect(() => {
@@ -112,33 +124,42 @@ export function GameScreen({ puzzle, image }: Props) {
   const cell = boardWidth / COLS;
   const dragPieceSize = Math.max(48, cell * DRAG_SCALE);
 
-  // Where the board is on screen, for turning a drop point into a cell.
+  // Where the board and hold slot are on screen, for turning a drop point into a target.
   const boardRef = useRef<View>(null);
-  const boardRect = useRef<Rect | null>(null);
-  const measureBoard = useCallback(() => {
+  const holdRef = useRef<View>(null);
+  const rects = useRef<{ board: Rect | null; hold: Rect | null }>({ board: null, hold: null });
+  const measureTargets = useCallback(() => {
     boardRef.current?.measureInWindow((x, y, width, height) => {
-      boardRect.current = { x, y, width, height };
+      rects.current.board = { x, y, width, height };
+    });
+    holdRef.current?.measureInWindow((x, y, width, height) => {
+      rects.current.hold = { x, y, width, height };
     });
   }, []);
-  useEffect(measureBoard, [measureBoard, screen.width, screen.height]);
+  useEffect(measureTargets, [measureTargets, screen.width, screen.height]);
 
-  const cellAt = (x: number, y: number): number | null => {
-    const rect = boardRect.current;
-    if (!rect) return null;
-    const col = Math.floor(((x - rect.x) / rect.width) * COLS);
-    const row = Math.floor(((y - rect.y) / rect.height) * ROWS);
-    return col >= 0 && col < COLS && row >= 0 && row < ROWS ? indexOf(row, col) : null;
+  const targetAt = (x: number, y: number): DropTarget | null => {
+    const { board, hold } = rects.current;
+    if (hold && x >= hold.x && x < hold.x + hold.width && y >= hold.y && y < hold.y + hold.height) return { kind: 'hold' };
+    if (!board) return null;
+    const col = Math.floor(((x - board.x) / board.width) * COLS);
+    const row = Math.floor(((y - board.y) / board.height) * ROWS);
+    return col >= 0 && col < COLS && row >= 0 && row < ROWS ? { kind: 'cell', cell: indexOf(row, col) } : null;
   };
 
-  const current = currentPiece(game);
   const playing = game.status === 'playing';
   const drag = usePieceDrag({
-    enabled: playing && current !== null && !onboardingVisible,
+    enabled: playing && !onboardingVisible && !previewing,
     pieceSize: dragPieceSize,
-    cellAt,
-    onStart: measureBoard,
-    onDrop: (cell) => {
-      const { state, result, placement, miss } = dropPiece(game, cell, now());
+    targetAt,
+    onStart: measureTargets,
+    onDrop: (piece, target) => {
+      if (target?.kind === 'hold') {
+        setGame(holdPiece(game, piece, now()));
+        return;
+      }
+      const cell = target?.cell ?? null;
+      const { state, result, placement, miss } = dropPiece(game, piece, cell, now());
       setGame(state);
       if (placement) showPlacement(placement);
       if (miss) showMiss(miss);
@@ -150,40 +171,43 @@ export function GameScreen({ puzzle, image }: Props) {
     },
   });
 
-  // Hold is ignored mid-drag (so the piece in your hand can't change under you) and while the
-  // onboarding popup covers the board (its Space shortcut would otherwise reach right through it).
-  const dragging = drag.dragging;
-  const hold = useCallback(() => {
-    const t = now();
-    if (!dragging && !onboardingVisible) setGame((g) => holdPiece(g, t));
-  }, [dragging, onboardingVisible]);
-
-  // Space holds, on web.
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== 'Space') return;
-      e.preventDefault();
-      hold();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [hold]);
-
   const restart = () => {
     setFloats([]);
     setMissFlash(null);
+    setPreviewing(true);
     setGame(newGame(puzzle, now()));
   };
 
   return (
     <View style={styles.root}>
-      {/* Scrolls so the rules can sit below the game. Drags on the current piece don't scroll (see usePieceDrag). */}
+      {/* Scrolls so the rules can sit below the game. Drags on a piece don't scroll (see usePieceDrag). */}
       <ScrollView style={styles.scroll} contentContainerStyle={styles.screen}>
         <View style={[styles.layout, wide ? styles.layoutWide : styles.layoutNarrow]}>
           <View style={[styles.boardColumn, { width: boardWidth }]}>
             <View style={styles.header}>
-              <Text style={styles.title}>Puzzle #{puzzle.number}</Text>
+              <View style={styles.headerLeft}>
+                <Pressable
+                  testID="prev-puzzle"
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous puzzle"
+                  disabled={puzzle.number <= 1}
+                  style={[styles.helpButton, puzzle.number <= 1 && styles.disabled]}
+                  onPress={() => onSelectPuzzle(puzzle.number - 1)}
+                >
+                  <Text style={styles.helpButtonText}>‹</Text>
+                </Pressable>
+                <Text style={styles.title}>Puzzle #{puzzle.number}</Text>
+                <Pressable
+                  testID="next-puzzle"
+                  accessibilityRole="button"
+                  accessibilityLabel="Next puzzle"
+                  disabled={puzzle.number >= lastPuzzle}
+                  style={[styles.helpButton, puzzle.number >= lastPuzzle && styles.disabled]}
+                  onPress={() => onSelectPuzzle(puzzle.number + 1)}
+                >
+                  <Text style={styles.helpButtonText}>›</Text>
+                </Pressable>
+              </View>
               <View style={styles.headerRight}>
                 <Text testID="placed-count" style={styles.count}>
                   {game.placedCount}/{PIECE_COUNT}
@@ -224,7 +248,9 @@ export function GameScreen({ puzzle, image }: Props) {
                 width={boardWidth}
                 hoverCell={drag.hoverCell}
                 wrongCell={wrongCell}
-              />
+              >
+                {previewing && !onboardingVisible && <PhotoPreview image={image} ms={FLASH_MS} onDone={endPreview} />}
+              </Board>
               {/* A small card, so the finished picture stays visible. */}
               {!playing && (
                 <View style={styles.overlay}>
@@ -248,13 +274,15 @@ export function GameScreen({ puzzle, image }: Props) {
           <FeedPanel
             cuts={puzzle.cuts}
             image={image}
-            current={current}
+            hand={game.hand}
             hold={game.hold}
-            upcoming={upcomingPieces(game)}
+            deckCount={game.deck.length}
             canHold={canHold(game)}
-            onHold={hold}
-            dragHandlers={drag.handlers}
-            dragging={drag.dragging}
+            dragHandlers={drag.handlersFor}
+            dragged={drag.dragged}
+            holdHovered={drag.hoverHold && drag.dragged !== game.hold}
+            showPieces={!previewing}
+            holdRef={holdRef}
             compactWidth={wide ? undefined : boardWidth}
           />
         </View>
@@ -263,12 +291,12 @@ export function GameScreen({ puzzle, image }: Props) {
       </ScrollView>
 
       {/* The dragged copy, in window coordinates, so it sits in an unpadded root at the window origin. */}
-      {drag.dragging && current !== null && (
+      {drag.dragged !== null && (
         <Animated.View style={[styles.dragLayer, { transform: drag.position.getTranslateTransform() }]}>
           <PieceSvg
-            cut={puzzle.cuts[current]}
-            row={rowColOf(current)[0]}
-            col={rowColOf(current)[1]}
+            cut={puzzle.cuts[drag.dragged]}
+            row={rowColOf(drag.dragged)[0]}
+            col={rowColOf(drag.dragged)[1]}
             image={image}
             size={dragPieceSize}
           />
@@ -297,6 +325,7 @@ const styles = StyleSheet.create({
   layoutNarrow: { flexDirection: 'column', alignItems: 'stretch' },
   boardColumn: { gap: 10 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   title: { color: colors.text, fontSize: 20, fontWeight: '800' },
   count: { color: colors.muted, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
@@ -320,6 +349,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   helpButtonText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  disabled: { opacity: 0.35 },
   primaryButton: { backgroundColor: colors.accent, borderColor: colors.accent, marginTop: 6 },
   primaryButtonText: { color: '#06201d', fontSize: 14, fontWeight: '700' },
   overlay: {

@@ -3,6 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import {
   DECAY_TICK_MS,
   FAST_MS,
+  FLASH_MS,
+  HAND_SIZE,
   ISLAND_POINTS,
   MISS_LIMIT,
   MULT_MAX_TENTHS,
@@ -21,15 +23,15 @@ const tenths = (t: number) => (t / 10).toFixed(1);
 const RULES: { lead: string; text: string }[] = [
   {
     lead: 'The goal',
-    text: "Rebuild today's photo, one piece at a time. You never see the whole picture, so read each piece's image and its cut (the tabs and notches) to work out where it goes.",
+    text: `Rebuild today's photo. It's shown for ${seconds(FLASH_MS)} seconds at the start, then hidden, so read each piece's image and its cut (the tabs and notches) to work out where it goes.`,
   },
   {
     lead: 'Place',
-    text: 'Drag the current piece onto the board. The right spot locks it in. A wrong spot is a miss. Dropping it off the board just puts it back.',
+    text: `You hold ${HAND_SIZE} pieces at a time; drag any of them onto the board. The right spot locks it in and a new piece from the deck takes its place. A wrong spot is a miss. Dropping it off the board just puts it back.`,
   },
   {
     lead: 'Hold',
-    text: 'Tap the Hold slot (or press Space) to set the current piece aside and take the next one. You can hold once per piece; holding when a piece is already there swaps them.',
+    text: 'Drag a piece onto the Hold slot to set it aside and draw a new one. Once per placement; holding when a piece is already there swaps them. You can play the held piece straight from the slot.',
   },
   {
     lead: 'Islands and snaps',
@@ -37,7 +39,7 @@ const RULES: { lead: string; text: string }[] = [
   },
   {
     lead: 'Score multiplier',
-    text: `Place a piece within ${seconds(FAST_MS)} seconds of it appearing to raise the multiplier by ${tenths(MULT_STEP_TENTHS)}, up to ×${tenths(MULT_MAX_TENTHS)}. Go ${seconds(STALL_MS + DECAY_TICK_MS)} seconds without placing and it starts dropping; the timer in its box shows when. Each miss also costs ${tenths(WRONG_PENALTY_TENTHS)}.`,
+    text: `Place a piece within ${seconds(FAST_MS)} seconds of your last one to raise the multiplier by ${tenths(MULT_STEP_TENTHS)}, up to ×${tenths(MULT_MAX_TENTHS)}. Go ${seconds(STALL_MS + DECAY_TICK_MS)} seconds without placing and it starts dropping; the timer in its box shows when. Each miss also costs ${tenths(WRONG_PENALTY_TENTHS)}.`,
   },
   {
     lead: 'Pulse',

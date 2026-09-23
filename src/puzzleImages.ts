@@ -5,4 +5,18 @@ import type { ImageSourcePropType } from 'react-native';
 export const PUZZLE_IMAGES: ImageSourcePropType[] = [
   require('../assets/puzzles/0001.jpg'),
   require('../assets/puzzles/0002.jpg'),
+  require('../assets/puzzles/0003.jpg'),
+  require('../assets/puzzles/0004.jpg'),
+  require('../assets/puzzles/0005.jpg'),
+  require('../assets/puzzles/0006.jpg'),
+  require('../assets/puzzles/0007.jpg'),
+  require('../assets/puzzles/0008.jpg'),
+  require('../assets/puzzles/0009.jpg'),
+  require('../assets/puzzles/0010.jpg'),
+  require('../assets/puzzles/0011.jpg'),
+  require('../assets/puzzles/0012.jpg'),
+  require('../assets/puzzles/0013.jpg'),
+  require('../assets/puzzles/0014.jpg'),
+  require('../assets/puzzles/0015.jpg'),
+  require('../assets/puzzles/0016.jpg'),
 ];

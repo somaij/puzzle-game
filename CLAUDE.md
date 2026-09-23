@@ -10,8 +10,8 @@ with Expo so an Android (and iOS) app can later be built from the same code.
 Working title only; a plain, descriptive final name is still open (the POC used
 "Blind Cut" / "PulsePuzzle", and neither is final).
 
-The core idea: pieces are fed **one at a time** (Tetris-style, with a hold slot
-and a short preview queue) rather than dumped in a tray. You drag each piece
+The core idea: pieces are fed from a small **hand of 3** (with a hold slot)
+rather than dumped in a tray. You drag any hand piece
 onto a bare board and it locks into place, interlocking with its neighbours to
 build the picture. Scoring rewards a **risk/flow** loop layered on top of an
 otherwise relaxing jigsaw. Inspired in spirit (not mechanics) by Balatro: a
@@ -26,7 +26,8 @@ that makes jigsaws from *your own photos*, sold as a one-time purchase.
 ## Status
 
 Checkpoints 1–3 done: the daily puzzle is playable and scored on web.
-One-at-a-time feed, hold, next-3 preview, drag-to-place (mouse and touch),
+A 10 s photo preview at the start, a hand of 3 with a hold slot, drag-to-place
+(mouse and touch),
 island/snap scoring, score multiplier with fast bonus, stall decay and a
 countdown to the next drop, pulse ghosts, and a 12-miss limit (win on all 24
 placed, fail on the 12th miss). A quick onboarding popup shows once per browser
@@ -60,23 +61,40 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   continuous, seamless picture. Tabs stick out **14%** of a cell (`TAB_DEPTH`);
   each piece is drawn in a box padded **18%** (`PAD`) on every side so tabs and
   outlines aren't clipped.
-- **No reference photo is shown.** The player reads the fragment + cut to place.
+- **The photo is shown once, before play** (`FLASH_MS` = 10000, with a
+  countdown; `PhotoPreview`), then hidden for the rest of the game. No
+  persistent reference, and nothing on drop reveals correctness: the player
+  reads the fragment + cut (and what they remember) to place. The game's clocks
+  start when the preview hides, and the hand is kept hidden until then.
+  (A later Zen mode is meant to show a persistent dim reference instead; there
+  is no mode switch yet.)
 - The empty grid is **hidden**: the board is a bare assembly area. The only
   time a cell is indicated is a neutral gray outline under the piece being
   dragged (see below).
 
 **Feed & controls**
-- One "current" piece at a time, drawn from a shuffled deck.
-- A **hold** slot: stash the current piece for later (once per piece). This is
-  the player's main tool for turning a risky island into a safe snap: hold it
-  until its neighbours are down. Holding into an empty slot deals the next
-  piece; holding with a piece already held swaps them. Holding the **last**
-  deck piece into an empty slot is refused (nothing would be left to play).
-  Space holds on web; hold is ignored mid-drag.
-- A short **preview queue** (POC shows next 3).
+- A **hand** of `HAND_SIZE` = 3 playable pieces, dealt from a shuffled deck.
+  Any of them can be dragged. When one is placed (or held), the deck refills
+  **that same slot**, so the other pieces don't move under the player; once
+  the deck is empty, slots stay empty. The panel shows how many pieces are
+  left in the deck. There is no separate preview queue: the hand is the
+  visible upcoming set.
+- Why a hand: with one forced piece at a time the player often had to
+  blind-guess an island. With 3, once a few pieces are down a snap is nearly
+  always on offer (simulated over 500 daily deals, greedy play: a snap was in
+  hand on ~92% of turns after the third placement, ~95% digging with hold),
+  so taking the 100-point island gamble becomes a choice. **Keep the hand
+  small**: growing it toward a full tray brings back the cramped-pieces
+  problem this design avoids.
+- A **hold** slot: drag a hand piece onto it to stash it (once per
+  placement). Holding into an empty slot refills the hand from the deck;
+  holding with a piece already held swaps them. The held piece can be
+  **played straight from the slot**, so holding the last piece can't lock the
+  game up. There is no keyboard shortcut (Space used to hold the single
+  current piece; with a hand it would be ambiguous).
 
 **Placement (drag-and-drop)**
-- Drag the current piece onto the board (pointer/touch).
+- Drag a hand (or held) piece onto the board (pointer/touch).
 - Drop on the **correct** cell → it locks in (scores; see below).
 - Drop on a **wrong** cell → misplace penalty + brief red flash; piece returns.
 - Drop **off-board / on a filled cell** → returns quietly, no penalty.
@@ -105,11 +123,13 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
     box's bottom edge. Both run from the last placement to the first decay
     step (`decayStartsAt`), reset on each placement, and are hidden at 1.0×
     (nothing left to lose). Holds and
-    misses don't refill it. The 3.5 s fast window is deliberately *not* shown:
+    misses don't refill it. The 3 s fast window is deliberately *not* shown:
     a countdown running at 1.0× read to playtesters as the multiplier running
     out.
-  - A "fast" placement (within **3500 ms** of the piece appearing) adds **+0.1**.
-  - After a **4000 ms** stall (no placement), the multiplier ticks **−0.1 per
+  - A "fast" placement (within **3000 ms** of the **previous placement**, or of
+    the start of play for the first) adds **+0.1**. It means keeping up the
+    pace; with a hand there is no single moment a piece is "presented".
+  - After a **5000 ms** stall (no placement), the multiplier ticks **−0.1 per
     1000 ms** back toward 1.0.
   - A misplace costs **−0.1** (and one miss, below).
 - **Points per placement = round(base × multiplier).**
@@ -136,54 +156,39 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
 - Fires on **any correct island placement** (not gated on speed; islands are
   hard to place fast, so gating on speed made it never fire).
 - Reveals a ghost (faint image + cut) of the empty cells within Chebyshev
-  radius **1** of the placed island, for **~4200 ms**. Helps set up the next
+  radius **1** of the placed island, for **6000 ms** (the POC used ~4200). Helps set up the next
   placements.
 - Ghosts **fade out over their lifetime** so players can see when they will
   go: slowly at first (still readable for most of it), fastest at the end
   (ease-in), reaching zero as the engine removes them.
 
 **Rules the POC implements that weren't written down**
-- **Two separate clocks.** The *fast window* restarts when a new piece becomes
-  current: after a correct placement, a hold, **or a misplace**. The *stall
-  clock* restarts only after a correct placement. Decay steps due =
-  `floor((idle − STALL_MS) / DECAY_TICK)`, so the first −0.1 lands at 5 s idle
-  (as in the POC). The engine computes this from timestamps (`tick(state, now)`),
+- **Stall decay timing.** Both the fast window and the stall clock run from
+  the last correct placement (`lastPlacedAt`); holds and misses restart
+  neither. (The POC, with one current piece, restarted the fast window on a
+  hold or a misplace too; the hand made that meaningless.) Decay steps due =
+  `floor((idle − STALL_MS) / DECAY_TICK)`, so the first −0.1 lands at 6 s idle
+  (the POC used 5 s; raised to 10 s after play felt rushed, then settled on 6 s). The engine computes this from timestamps (`tick(state, now)`),
   so it doesn't depend on how often the UI ticks.
 - **The fast bonus is applied before scoring,** so the placement that earns
   +0.1 is paid at the raised multiplier.
 - **The POC labels the current piece before you place it** ("island" or
-  "snaps", plus corner/edge/interior). **This app doesn't**: the label was
-  removed after playtesting. "Snaps" told you the piece belongs next to the
-  placed cluster, a pre-placement correctness hint. Don't reintroduce it.
+  "snaps", plus corner/edge/interior). **This app doesn't label hand
+  pieces**: the label was removed after playtesting. "Snaps" told you the
+  piece belongs next to the placed cluster, a pre-placement correctness hint.
+  Don't reintroduce it.
 
 **Fixes: where the POC is wrong and this spec wins**
-- **End of deck.** When the deck runs out, the held piece becomes current.
-  The puzzle is won when **all N pieces are placed**, not when the deck is
-  empty. (The POC ends "solved" at 23/24 whenever hold was used, and locks up
-  if you hold the very last piece into an empty slot.)
+- **End of deck.** The puzzle is won when **all N pieces are placed**, not
+  when the deck is empty, and a held piece stays playable from the hold slot.
+  (The POC ends "solved" at 23/24 whenever hold was used, and locks up if you
+  hold the very last piece into an empty slot.)
 - **Multiplier in whole tenths.** Store it as an integer 10–15 and score as
   `round(base × tenths / 10)` in integer maths. (The POC's float drifts: 1.3×
   reached going up pays a snap 33, reached going down pays 32.)
 
-### Tuned constants (current POC values, the starting point for balancing)
-In code: `src/engine/constants.ts` (multiplier values stored as tenths).
-
-| Constant | Value | Meaning |
-|---|---|---|
-| grid | 6×4 | pieces per board |
-| ISLAND | 100 | base points, no placed neighbour |
-| SNAP | 25 | base points, touches a placed piece |
-| FAST_MS | 3500 | window for a "fast" placement (+0.1 mult) |
-| MULT_MIN / MULT_MAX | 1.0 / 1.5 | flow multiplier bounds |
-| MULT_STEP | 0.1 | mult gained per fast placement |
-| STALL_MS | 4000 | idle grace before the multiplier decays |
-| DECAY_TICK | 1000 | ms between −0.1 decay steps |
-| WRONG_PENALTY | 0.1 | mult lost on a misplace |
-| PULSE_RADIUS | 1 | Chebyshev radius the pulse reveals |
-| PULSE_MS | 4200 | how long the pulse ghost stays |
-| MISS_LIMIT | 12 | wrong drops per puzzle; the 12th ends the game |
-
-Treat these as balancing knobs, not gospel. They're where tuning happens.
+Tuning knobs live in `src/engine/constants.ts` (multiplier values stored as
+tenths); treat them as a starting point, not gospel.
 
 ## Daily puzzle rules
 
@@ -209,14 +214,13 @@ Treat these as balancing knobs, not gospel. They're where tuning happens.
   reorder, remove or renumber `assets/puzzles/NNNN.jpg`, or days already played
   would show a different photo. Appending only changes days that would
   otherwise have wrapped around to image 1, so keep the list ahead of today.
-- **Adding your own photos:** drop them in `photos-inbox/` (git-ignored except
-  its README), run `npm run photos:review` and check `photos-inbox/review.html`,
-  then `npm run photos:add`. The script (`scripts/prepare-photos.mjs`, uses
-  `sharp`, dev-only) crops to 3:2, resizes to 1280×853, strips all metadata,
-  flags photos with more than 4 low-detail cells, numbers them, credits them
-  and regenerates `src/puzzleImages.ts`. Its 6×4 / 3:2 numbers must match
-  `src/engine/constants.ts`.
-- Dev only: `?puzzle=N` in the web URL loads a specific puzzle.
+- **Adding your own photos:** see the `add-photos` skill for the workflow.
+- **Switching puzzles (testing aid):** ‹ › beside the title step through
+  puzzles 1 to `max(today, image count)`, so every past day and every bundled
+  photo is reachable; the choice is kept in the URL as `?puzzle=N` (which
+  also works as a link, in dev and in the live build). Checkpoint 4's
+  one-play-per-day loop has to decide whether players keep this (e.g. as an
+  archive of past days) or it goes back to dev-only.
 
 ## Product direction
 
@@ -228,7 +232,7 @@ Treat these as balancing knobs, not gospel. They're where tuning happens.
   one-time purchase in the app is the likely shape).
 - **Genre flaws to keep fixing** (the differentiators): no intrusive ads, no
   subscriptions, reliable save & resume, no cramped-pieces-on-phone problem
-  (the one-at-a-time feed sidesteps it).
+  (the small hand, instead of a tray of every piece, sidesteps it).
 
 ## Tech & architecture
 
@@ -256,45 +260,12 @@ Treat these as balancing knobs, not gospel. They're where tuning happens.
   versioned docs (https://docs.expo.dev/versions/v57.0.0/) rather than memory.
   Add packages with `npx expo install <pkg>` so versions match the SDK.
 
-### Layout
-```
-App.tsx                  picks today's puzzle, renders GameScreen
-src/engine/              constants, rng, cuts, geometry, daily, game (+ __tests__/)
-src/ui/GameScreen.tsx    game state + 100 ms clock tick, layout (wide: side panel; narrow: feed below), end card;
-                         everything sits in a ScrollView so the rules can follow the game
-src/ui/usePieceDrag.ts   drag via RN responder props (no PanResponder, no gesture libs)
-src/ui/Board.tsx         placed pieces, pulse ghosts, hover outline, wrong-cell flash, rising "+points" text
-src/ui/FeedPanel.tsx     current / hold / next
-src/ui/ScoreBar.tsx      score, score multiplier (level meter + countdown to its next drop), misses left;
-                         one row when wide, two rows on phones
-src/ui/HowToPlay.tsx     rules for testers, below the game; numbers come from engine constants
-src/ui/OnboardingModal.tsx  quick first-visit popup, shown once per browser (see storage.ts)
-src/ui/PieceSvg.tsx      one piece: image clipped to its cut
-src/storage.ts           tiny localStorage wrapper (onboarding now; stats/streak from checkpoint 4)
-src/puzzleImages.ts      the daily image list (generated by the photo script; don't hand-edit)
-assets/puzzles/          daily images + CREDITS.md
-scripts/prepare-photos.mjs  prepares your own photos (review contact sheet, then add)
-photos-inbox/            drop originals here; git-ignored except README.md
-docs/poc/                the HTML prototype
-```
 Game rules live in `src/engine/game.ts` as pure functions (`newGame`,
 `holdPiece`, `dropPiece`, `tick`) that take a timestamp and return new state;
 components only render state and forward input. The UI's clock is
 `performance.now()`. The React Compiler lint rules are on: don't read or write
 refs during render.
 
-### Commands
-```
-npm run web              # dev server, opens the web build
-npm test                 # Jest (engine tests)
-npm run typecheck        # tsc --noEmit
-npm run lint             # expo lint
-npm run export:web       # static site → dist/  (paths are under /puzzle-game/)
-npm run deploy           # export + publish to GitHub Pages (gh-pages branch)
-npm run photos:review    # contact sheet of photos in photos-inbox/ → photos-inbox/review.html
-npm run photos:add       # add inbox photos as the next daily images
-npx expo-doctor          # dependency/config health check
-```
 Run typecheck, lint and tests before calling a task done.
 
 ## Conventions & collaboration
@@ -319,18 +290,22 @@ Run typecheck, lint and tests before calling a task done.
 ## Open questions
 
 - **Is 12 misses the right number?** Started at 6, then 10; playtesting found
-  both too punishing, so it is now 12 (see Misses). Still to tune. The first
-  piece is always a blind island: by
-  cut shape alone a corner has 1 possible cell, a top/bottom edge 4, a
-  left/right edge 2, and an interior piece 8, so an unlucky first deal can cost
-  a few misses before play really starts (holding for a corner helps).
+  both too punishing, so it is now 12 (see Misses). Still to tune, and likely
+  down again now that the hand and the photo preview make play easier. The
+  first piece is always an island: by cut shape alone a corner has 1 possible
+  cell, a top/bottom edge 4, a left/right edge 2, and an interior piece 8
+  (the preview, and picking a corner from the hand, now soften this).
 - **Pulse diagonals.** The radius-1 pulse includes diagonal cells, and a piece
   placed diagonally from an island is still an island (100 points + another
   pulse), with no guessing. Keep it as a chaining feature, or reveal only the
   4 side cells? Seen in testing: fast island play overlaps pulses and can ghost
   most of the empty board at once.
-- **Unknown image.** Daily players haven't seen the picture, unlike their own
-  photos. Show it briefly at the start, or show nothing?
+- **Photo preview length.** Now a 10 s flash (raised from 5 s) before play (see Board &
+  pieces). Is 10 s right, and does it make islands too easy?
+- **Is the fast window too easy to keep with a hand?** "Fast" is now 3 s
+  since the previous placement, and with 3 pieces to choose from the next
+  snap is usually obvious, so a steady player may sit at 1.5× most of the
+  game. Watch in playtesting; the knob is `FAST_MS`.
 - **Daily image supply.** Starting with the owner's own landscape photos
   (plenty to begin with). Later sources: CC0 museum collections (The Met, Art
   Institute of Chicago, Rijksmuseum, Cleveland Museum of Art, Smithsonian) and

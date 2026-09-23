@@ -2,6 +2,7 @@ import {
   COLS,
   DECAY_TICK_MS,
   FAST_MS,
+  HAND_SIZE,
   ISLAND_POINTS,
   MISS_LIMIT,
   MULT_MAX_TENTHS,
@@ -18,9 +19,6 @@ import {
 import { indexOf, rowColOf } from './cuts';
 import type { Puzzle } from './daily';
 
-/** How many upcoming pieces the preview shows. */
-export const QUEUE_LENGTH = 3;
-
 /** A pulse ghost: an empty cell shown faintly (image + cut) until `until`. */
 export type Ghost = { cell: number; until: number };
 /** One entry per placement or miss, in order (the share result is built from these). */
@@ -31,11 +29,16 @@ export type Move = 'island' | 'snap' | 'miss';
  * (the UI passes `performance.now()`; tests pass plain numbers).
  */
 export type GameState = {
-  /** Pieces still to play, in deal order. deck[0] is the current piece. */
+  /**
+   * The pieces you can play, HAND_SIZE slots. A slot keeps its place when its neighbours are
+   * played, and is null once the deck can no longer refill it.
+   */
+  hand: readonly (number | null)[];
+  /** Pieces not yet dealt, in deal order. */
   deck: readonly number[];
-  /** The piece in the hold slot, if any. */
+  /** The piece in the hold slot, if any. It can be played straight from there. */
   hold: number | null;
-  /** Hold can be used once per current piece. */
+  /** Hold can be used once per placement. */
   holdUsed: boolean;
   /** placed[i] is true once piece i is on the board. */
   placed: readonly boolean[];
@@ -46,9 +49,7 @@ export type GameState = {
   /** Flow multiplier in whole tenths: 10 = 1.0×. */
   multTenths: number;
   misses: number;
-  /** When the current piece was dealt, or re-dealt after a hold or a miss. Starts the fast window. */
-  presentedAt: number;
-  /** When a piece was last placed (or the game started). Starts the stall clock. */
+  /** When a piece was last placed (or the game started). Starts both the fast window and the stall clock. */
   lastPlacedAt: number;
   /** Stall-decay steps already applied since `lastPlacedAt`. */
   decaySteps: number;
@@ -70,7 +71,8 @@ export type Miss = { cell: number; multLostTenths: number };
 
 export function newGame(puzzle: Puzzle, now: number): GameState {
   return {
-    deck: puzzle.order.slice(),
+    hand: puzzle.order.slice(0, HAND_SIZE),
+    deck: puzzle.order.slice(HAND_SIZE),
     hold: null,
     holdUsed: false,
     placed: Array<boolean>(PIECE_COUNT).fill(false),
@@ -79,7 +81,6 @@ export function newGame(puzzle: Puzzle, now: number): GameState {
     score: 0,
     multTenths: MULT_MIN_TENTHS,
     misses: 0,
-    presentedAt: now,
     lastPlacedAt: now,
     decaySteps: 0,
     ghosts: [],
@@ -87,12 +88,9 @@ export function newGame(puzzle: Puzzle, now: number): GameState {
   };
 }
 
-export function currentPiece(state: GameState): number | null {
-  return state.deck.length > 0 ? state.deck[0] : null;
-}
-
-export function upcomingPieces(state: GameState): number[] {
-  return state.deck.slice(1, 1 + QUEUE_LENGTH);
+/** Whether `piece` can be dragged right now: it's in the hand or the hold slot. */
+export function isPlayable(state: GameState, piece: number): boolean {
+  return state.status === 'playing' && (state.hand.includes(piece) || state.hold === piece);
 }
 
 export function missesLeft(state: GameState): number {
@@ -145,31 +143,45 @@ export function tick(state: GameState, now: number): GameState {
 }
 
 export function canHold(state: GameState): boolean {
-  // Holding the last piece into an empty slot would leave nothing to play, so it isn't allowed.
-  return state.status === 'playing' && !state.holdUsed && (state.hold !== null || state.deck.length > 1);
+  return state.status === 'playing' && !state.holdUsed;
 }
 
-/** Stash the current piece, swapping in the held one if there is one. The new piece gets a fresh fast window. */
-export function holdPiece(state: GameState, now: number): GameState {
+/** The hand with `piece`'s slot refilled by `replacement`, or from the deck (null if the deck is empty). */
+function refillSlot(state: GameState, piece: number, replacement?: number) {
+  const hand = state.hand.slice();
+  let deck = state.deck;
+  const slot = hand.indexOf(piece);
+  if (replacement !== undefined) hand[slot] = replacement;
+  else {
+    hand[slot] = deck.length > 0 ? deck[0] : null;
+    deck = deck.slice(1);
+  }
+  return { hand, deck };
+}
+
+/**
+ * Move a hand piece to the hold slot. An empty hold slot refills the hand from the deck; a
+ * held piece swaps into the hand in its place. Once per placement.
+ */
+export function holdPiece(state: GameState, piece: number, now: number): GameState {
   const ticked = tick(state, now);
-  if (!canHold(ticked)) return ticked;
-  const [current, ...rest] = ticked.deck;
-  const deck = ticked.hold === null ? rest : [ticked.hold, ...rest];
-  return { ...ticked, deck, hold: current, holdUsed: true, presentedAt: now };
+  if (!canHold(ticked) || !ticked.hand.includes(piece)) return ticked;
+  const { hand, deck } = refillSlot(ticked, piece, ticked.hold ?? undefined);
+  return { ...ticked, hand, deck, hold: piece, holdUsed: true };
 }
 
-/** Drop the current piece on `cell` (null = off the board). */
+/** Drop `piece` (from the hand or the hold slot) on `cell` (null = off the board). */
 export function dropPiece(
   state: GameState,
+  piece: number,
   cell: number | null,
   now: number,
 ): { state: GameState; result: DropResult; placement?: Placement; miss?: Miss } {
   const s = tick(state, now);
-  const current = currentPiece(s);
-  if (s.status !== 'playing' || current === null) return { state: s, result: 'returned' };
+  if (!isPlayable(s, piece)) return { state: s, result: 'returned' };
   if (cell === null || cell < 0 || cell >= PIECE_COUNT || s.placed[cell]) return { state: s, result: 'returned' };
 
-  if (cell !== current) {
+  if (cell !== piece) {
     const misses = s.misses + 1;
     const multTenths = Math.max(MULT_MIN_TENTHS, s.multTenths - WRONG_PENALTY_TENTHS);
     return {
@@ -177,7 +189,6 @@ export function dropPiece(
         ...s,
         misses,
         multTenths,
-        presentedAt: now,
         moves: [...s.moves, 'miss'],
         status: misses >= MISS_LIMIT ? 'failed' : 'playing',
       },
@@ -186,9 +197,10 @@ export function dropPiece(
     };
   }
 
-  // Scoring: the fast bonus is added before the points are counted.
+  // Scoring: the fast bonus is added before the points are counted. "Fast" means keeping up
+  // the pace: within FAST_MS of the previous placement (or the start).
   const island = isIsland(s, cell);
-  const fast = now - s.presentedAt <= FAST_MS;
+  const fast = now - s.lastPlacedAt <= FAST_MS;
   const multTenths = fast ? Math.min(MULT_MAX_TENTHS, s.multTenths + MULT_STEP_TENTHS) : s.multTenths;
   const points = pointsFor(island ? ISLAND_POINTS : SNAP_POINTS, multTenths);
 
@@ -196,13 +208,8 @@ export function dropPiece(
   placed[cell] = true;
   const placedCount = s.placedCount + 1;
 
-  // When the deck runs out, the held piece is dealt last.
-  let deck = s.deck.slice(1);
-  let hold = s.hold;
-  if (deck.length === 0 && hold !== null) {
-    deck = [hold];
-    hold = null;
-  }
+  const fromHold = s.hold === piece;
+  const { hand, deck } = fromHold ? { hand: s.hand, deck: s.deck } : refillSlot(s, piece);
 
   // A correct island fires the pulse: ghosts on the empty cells around it.
   let ghosts = s.ghosts.filter((g) => g.cell !== cell);
@@ -218,15 +225,15 @@ export function dropPiece(
   return {
     state: {
       ...s,
+      hand,
       deck,
-      hold,
+      hold: fromHold ? null : s.hold,
       holdUsed: false,
       placed,
       placedCount,
       status: placedCount === PIECE_COUNT ? 'won' : 'playing',
       score: s.score + points,
       multTenths,
-      presentedAt: now,
       lastPlacedAt: now,
       decaySteps: 0,
       ghosts,

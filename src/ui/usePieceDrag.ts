@@ -1,15 +1,18 @@
 import { useRef, useState } from 'react';
 import { Animated, Platform, type GestureResponderEvent, type GestureResponderHandlers } from 'react-native';
 
+/** Where a dragged piece can land: a board cell, or the hold slot. */
+export type DropTarget = { kind: 'cell'; cell: number } | { kind: 'hold' };
+
 type Options = {
   enabled: boolean;
   /** Drawn size of the dragged piece's box, in px. */
   pieceSize: number;
-  /** The board cell under a window point, or null if the point is off the board. */
-  cellAt: (x: number, y: number) => number | null;
+  /** What's under a window point: a board cell, the hold slot, or null for nowhere. */
+  targetAt: (x: number, y: number) => DropTarget | null;
   onStart: () => void;
-  /** Called on release with the cell under the piece's centre (null = off the board). */
-  onDrop: (cell: number | null) => void;
+  /** Called on release with the piece and what's under its centre (null = nowhere). */
+  onDrop: (piece: number, target: DropTarget | null) => void;
 };
 
 /** On touch screens the dragged piece is drawn this many piece-heights above the finger, so it isn't hidden. */
@@ -20,16 +23,20 @@ function isTouchScreen(): boolean {
   return typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 }
 
+const keyOf = (t: DropTarget | null) => (t === null ? '' : t.kind === 'hold' ? 'hold' : `cell${t.cell}`);
+const sameTarget = (a: DropTarget | null, b: DropTarget | null) => keyOf(a) === keyOf(b);
+
 /**
- * Drag handling for the current piece. Spread `handlers` onto the piece in the feed, and draw
- * the dragged copy at `position` (its top-left corner, in window coordinates) while `dragging`.
+ * Drag handling for the playable pieces. Spread `handlersFor(piece)` onto each piece in the
+ * feed, and draw the dragged copy of `dragged` at `position` (its top-left corner, in window
+ * coordinates).
  */
-export function usePieceDrag({ enabled, pieceSize, cellAt, onStart, onDrop }: Options) {
+export function usePieceDrag({ enabled, pieceSize, targetAt, onStart, onDrop }: Options) {
   const [position] = useState(() => new Animated.ValueXY());
-  const [dragging, setDragging] = useState(false);
-  const [hoverCell, setHoverCell] = useState<number | null>(null);
+  const [dragged, setDragged] = useState<number | null>(null);
+  const [hover, setHover] = useState<DropTarget | null>(null);
   // Per-drag values that change on every move, kept out of state to avoid re-rendering each frame.
-  const gesture = useRef({ lift: 0, x: 0, y: 0, hover: null as number | null });
+  const gesture = useRef({ piece: -1, lift: 0, x: 0, y: 0, hover: null as DropTarget | null });
 
   // The piece centre follows the pointer, lifted above it on touch screens.
   const track = (e: GestureResponderEvent) => {
@@ -42,30 +49,31 @@ export function usePieceDrag({ enabled, pieceSize, cellAt, onStart, onDrop }: Op
     track(e);
     const g = gesture.current;
     position.setValue({ x: g.x - pieceSize / 2, y: g.y - pieceSize / 2 });
-    const cell = cellAt(g.x, g.y);
-    if (cell !== g.hover) {
-      g.hover = cell;
-      setHoverCell(cell);
+    const target = targetAt(g.x, g.y);
+    if (!sameTarget(target, g.hover)) {
+      g.hover = target;
+      setHover(target);
     }
   };
 
   const finish = (drop: boolean) => {
     const g = gesture.current;
-    const cell = cellAt(g.x, g.y);
+    const target = targetAt(g.x, g.y);
     g.hover = null;
-    setHoverCell(null);
-    setDragging(false);
-    if (drop) onDrop(cell);
+    setHover(null);
+    setDragged(null);
+    if (drop) onDrop(g.piece, target);
   };
 
-  const handlers: GestureResponderHandlers = {
+  const handlersFor = (piece: number): GestureResponderHandlers => ({
     onStartShouldSetResponder: () => enabled,
     onMoveShouldSetResponder: () => enabled,
     onResponderTerminationRequest: () => false,
     onResponderGrant: (e) => {
       onStart();
+      gesture.current.piece = piece;
       gesture.current.lift = isTouchScreen() ? pieceSize * TOUCH_LIFT : 0;
-      setDragging(true);
+      setDragged(piece);
       moveTo(e);
       // true = keep native views (the screen's ScrollView on Android) from taking over the touch.
       // On web the piece's `touchAction: 'none'` does the same job.
@@ -78,7 +86,13 @@ export function usePieceDrag({ enabled, pieceSize, cellAt, onStart, onDrop }: Op
       finish(true);
     },
     onResponderTerminate: () => finish(false),
-  };
+  });
 
-  return { handlers, dragging, position, hoverCell };
+  return {
+    handlersFor,
+    dragged,
+    position,
+    hoverCell: hover?.kind === 'cell' ? hover.cell : null,
+    hoverHold: hover?.kind === 'hold',
+  };
 }
