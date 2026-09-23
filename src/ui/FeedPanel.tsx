@@ -1,6 +1,7 @@
 import type { Ref } from 'react';
 import {
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -26,7 +27,11 @@ type Props = {
   dragHandlers: (piece: number) => GestureResponderHandlers;
   /** The piece being dragged: hidden here, since the dragged copy is drawn over the screen. */
   dragged: number | null;
-  /** A dragged piece is over the hold slot. */
+  /** The piece selected for tap-to-place, if any: its slot is highlighted. */
+  selected: number | null;
+  /** The hold slot was tapped (holds the selected piece, if there is one). */
+  onHoldPress: () => void;
+  /** A dragged piece is over the hold slot, or a hand piece is selected: the slot is a target. */
   holdHovered: boolean;
   /** False while the photo is previewed: the slots show empty until play starts. */
   showPieces: boolean;
@@ -51,8 +56,22 @@ const draggableOnWeb =
 
 /** The hand of playable pieces, the hold slot, and how many pieces are left to deal. */
 export function FeedPanel(props: Props) {
-  const { cuts, image, hand, hold, deckCount, canHold, dragHandlers, dragged, holdHovered, showPieces, holdRef, compactWidth } =
-    props;
+  const {
+    cuts,
+    image,
+    hand,
+    hold,
+    deckCount,
+    canHold,
+    dragHandlers,
+    dragged,
+    selected,
+    onHoldPress,
+    holdHovered,
+    showPieces,
+    holdRef,
+    compactWidth,
+  } = props;
   const compact = compactWidth !== undefined;
   const size = compact ? compactSlot(compactWidth) : SIDE_SLOT;
 
@@ -70,25 +89,44 @@ export function FeedPanel(props: Props) {
     <View style={[styles.panel, compact && styles.panelCompact]}>
       <View style={styles.header}>
         <Text style={styles.label}>Hand</Text>
-        <Text testID="deck-count" style={styles.deckCount}>
-          {deckCount} left in deck
-        </Text>
+        {selected === null ? (
+          <Text testID="deck-count" style={styles.deckCount}>
+            {deckCount} left in deck
+          </Text>
+        ) : (
+          <Text testID="tap-hint" style={styles.hint}>
+            Tap its spot on the board
+          </Text>
+        )}
       </View>
       <View style={[styles.slots, { gap: compact ? COMPACT_GAP : 10 }]}>
         {hand.map((piece, i) => (
-          <View key={i} testID={`hand-slot-${i}`} style={[styles.slot, styles.handSlot, { width: size, height: size }]}>
+          <View
+            key={i}
+            testID={`hand-slot-${i}`}
+            style={[styles.slot, styles.handSlot, { width: size, height: size }, piece !== null && piece === selected && styles.selected]}
+          >
             {slotContent(piece)}
           </View>
         ))}
-        <View
+        {/* Tapping the piece inside goes to its own handlers; this catches taps on an empty slot. */}
+        <Pressable
           ref={holdRef}
           testID="hold-slot"
-          style={[styles.slot, styles.holdSlot, { width: size, height: size }, holdHovered && canHold && styles.holdHovered]}
+          accessibilityLabel="Hold"
+          onPress={onHoldPress}
+          style={[
+            styles.slot,
+            styles.holdSlot,
+            { width: size, height: size },
+            holdHovered && canHold && styles.holdHovered,
+            hold !== null && hold === selected && styles.selected,
+          ]}
         >
           {slotContent(hold)}
           {/* After the piece, so a held piece doesn't cover it. */}
           <Text style={[styles.holdTag, !canHold && styles.dimmed]}>Hold</Text>
-        </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -110,7 +148,9 @@ const styles = StyleSheet.create({
   deckCount: { color: colors.muted, fontSize: 12, fontVariant: ['tabular-nums'] },
   slots: { flexDirection: 'row', flexWrap: 'wrap' },
   slot: { alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
-  handSlot: { backgroundColor: colors.board },
+  handSlot: { backgroundColor: colors.board, borderColor: 'transparent', borderWidth: 2 },
+  selected: { borderColor: colors.accent, borderWidth: 2, borderStyle: 'solid' },
+  hint: { color: colors.accent, fontSize: 12, fontWeight: '600' },
   holdSlot: { borderColor: colors.line, borderWidth: 1, borderStyle: 'dashed' },
   holdHovered: { borderColor: colors.accent, borderWidth: 2 },
   holdTag: {

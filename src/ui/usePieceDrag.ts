@@ -11,12 +11,16 @@ type Options = {
   /** What's under a window point: a board cell, the hold slot, or null for nowhere. */
   targetAt: (x: number, y: number) => DropTarget | null;
   onStart: () => void;
+  /** Called when a piece is tapped (pressed and released without dragging): selects it for tap-to-place. */
+  onTap: (piece: number) => void;
   /** Called on release with the piece and what's under its centre (null = nowhere). */
   onDrop: (piece: number, target: DropTarget | null) => void;
 };
 
 /** On touch screens the dragged piece is drawn this many piece-heights above the finger, so it isn't hidden. */
 const TOUCH_LIFT = 0.75;
+/** A press that moves less than this (px) before release is a tap, not a drag. */
+export const TAP_SLOP = 8;
 
 function isTouchScreen(): boolean {
   if (Platform.OS !== 'web') return true;
@@ -27,16 +31,16 @@ const keyOf = (t: DropTarget | null) => (t === null ? '' : t.kind === 'hold' ? '
 const sameTarget = (a: DropTarget | null, b: DropTarget | null) => keyOf(a) === keyOf(b);
 
 /**
- * Drag handling for the playable pieces. Spread `handlersFor(piece)` onto each piece in the
+ * Drag (and tap) handling for the playable pieces. Spread `handlersFor(piece)` onto each piece in the
  * feed, and draw the dragged copy of `dragged` at `position` (its top-left corner, in window
  * coordinates).
  */
-export function usePieceDrag({ enabled, pieceSize, targetAt, onStart, onDrop }: Options) {
+export function usePieceDrag({ enabled, pieceSize, targetAt, onStart, onTap, onDrop }: Options) {
   const [position] = useState(() => new Animated.ValueXY());
   const [dragged, setDragged] = useState<number | null>(null);
   const [hover, setHover] = useState<DropTarget | null>(null);
   // Per-drag values that change on every move, kept out of state to avoid re-rendering each frame.
-  const gesture = useRef({ piece: -1, lift: 0, x: 0, y: 0, hover: null as DropTarget | null });
+  const gesture = useRef({ piece: -1, lift: 0, x: 0, y: 0, startX: 0, startY: 0, dragging: false, hover: null as DropTarget | null });
 
   // The piece centre follows the pointer, lifted above it on touch screens.
   const track = (e: GestureResponderEvent) => {
@@ -71,21 +75,38 @@ export function usePieceDrag({ enabled, pieceSize, targetAt, onStart, onDrop }: 
     onResponderTerminationRequest: () => false,
     onResponderGrant: (e) => {
       onStart();
-      gesture.current.piece = piece;
-      gesture.current.lift = isTouchScreen() ? pieceSize * TOUCH_LIFT : 0;
-      setDragged(piece);
-      moveTo(e);
+      const g = gesture.current;
+      g.piece = piece;
+      g.lift = isTouchScreen() ? pieceSize * TOUCH_LIFT : 0;
+      g.startX = e.nativeEvent.pageX;
+      g.startY = e.nativeEvent.pageY;
+      // The drag (and its floating copy) only starts once the press moves, so a tap stays a tap.
+      g.dragging = false;
       // true = keep native views (the screen's ScrollView on Android) from taking over the touch.
       // On web the piece's `touchAction: 'none'` does the same job.
       return true;
     },
-    onResponderMove: moveTo,
-    // Use the release point itself: the last move event can lag behind a fast flick.
+    onResponderMove: (e) => {
+      const g = gesture.current;
+      if (!g.dragging) {
+        if (Math.hypot(e.nativeEvent.pageX - g.startX, e.nativeEvent.pageY - g.startY) < TAP_SLOP) return;
+        g.dragging = true;
+        setDragged(piece);
+      }
+      moveTo(e);
+    },
     onResponderRelease: (e) => {
+      if (!gesture.current.dragging) {
+        onTap(piece);
+        return;
+      }
+      // Use the release point itself: the last move event can lag behind a fast flick.
       track(e);
       finish(true);
     },
-    onResponderTerminate: () => finish(false),
+    onResponderTerminate: () => {
+      if (gesture.current.dragging) finish(false);
+    },
   });
 
   return {

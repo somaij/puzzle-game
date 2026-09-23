@@ -20,7 +20,7 @@ export function OnboardingModal({ visible, onDismiss }: Props) {
         <Text style={styles.body}>
           Rebuild today&rsquo;s photo. You&rsquo;ll see it for {FLASH_MS / 1000} seconds, then it hides: read
           each piece&rsquo;s image and cut to work out where it goes. Drag any piece from your hand onto the
-          board. Quick, correct placements raise your score multiplier; a wrong spot costs one of your{' '}
+          board, or tap it and then tap its spot. Quick, correct placements raise your score multiplier; a wrong spot costs one of your{' '}
           {MISS_LIMIT} misses. Full rules are always below the board.
         </Text>
         <Pressable style={styles.button} onPress={onDismiss}>

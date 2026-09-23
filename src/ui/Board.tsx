@@ -1,5 +1,14 @@
 import { useEffect, useState, type ReactNode, type Ref } from 'react';
-import { Animated, Easing, Platform, StyleSheet, View, type ImageSourcePropType, type TextStyle } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Platform,
+  StyleSheet,
+  View,
+  type GestureResponderHandlers,
+  type ImageSourcePropType,
+  type TextStyle,
+} from 'react-native';
 
 import { COLS, ROWS } from '../engine/constants';
 import { rowColOf, type Cut } from '../engine/cuts';
@@ -25,6 +34,8 @@ type Props = {
   hoverCell: number | null;
   /** Cell a piece was just wrongly dropped on: flashes red. */
   wrongCell: number | null;
+  /** Touch handlers for the play area (tap-to-place, while a piece is selected). */
+  touchHandlers?: GestureResponderHandlers;
   /** Attached to the exact-size play area, for measuring its position on screen. */
   ref?: Ref<View>;
   /** Drawn over the play area, clipped to it (the photo preview). */
@@ -41,7 +52,7 @@ const textShadow = Platform.select<TextStyle>({
 });
 
 /** The bare assembly area. Only placed pieces (and pulse ghosts) are drawn; the grid itself stays hidden. */
-export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width, hoverCell, wrongCell, ref, children }: Props) {
+export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width, hoverCell, wrongCell, touchHandlers, ref, children }: Props) {
   const playWidth = width - 2 * FRAME_BORDER;
   const cell = playWidth / COLS;
   const pieceAt = (i: number) => {
@@ -51,7 +62,7 @@ export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width,
 
   return (
     <View style={styles.frame}>
-      <View ref={ref} testID="board" style={[styles.board, { width: playWidth, height: cell * ROWS }]}>
+      <View ref={ref} testID="board" {...touchHandlers} style={[styles.board, { width: playWidth, height: cell * ROWS }]}>
         {ghosts.map((g) => (
           <GhostPiece key={`ghost-${g.cell}-${g.until}`} {...pieceAt(g.cell)} cut={cuts[g.cell]} image={image} until={g.until} />
         ))}

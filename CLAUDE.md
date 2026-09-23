@@ -26,7 +26,7 @@ that makes jigsaws from *your own photos*, sold as a one-time purchase.
 ## Status
 
 Checkpoints 1–3 done: the daily puzzle is playable and scored on web.
-A 10 s photo preview at the start, a hand of 3 with a hold slot, drag-to-place
+A 10 s photo preview at the start, a hand of 3 with a hold slot, drag- or tap-to-place
 (mouse and touch),
 island/snap scoring, score multiplier with fast bonus, stall decay and a
 countdown to the next drop, pulse ghosts, and a 12-miss limit (win on all 24
@@ -109,6 +109,16 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   size), not under it. The POC centres it on the pointer, which a thumb hides.
 - The drop uses the **release event's** position, not the last move seen, so a
   fast flick lands where the finger lifted.
+- **Tap-to-place** (the easier control on phones, and it works with a mouse):
+  a press that moves less than `TAP_SLOP` (8 px) is a tap, not a drag. Tapping
+  a hand or held piece selects it (accent border, and the panel says "Tap its
+  spot on the board"); tapping it again deselects. With a piece selected, a tap
+  on a board cell drops it there with the same rules as a drag; a tap on the
+  hold slot (or on the held piece) holds it. A wrong cell also deselects, so an
+  accidental double tap can't cost two misses; a filled cell is ignored. No
+  correctness hint while selected, as with dragging.
+- On web the game blocks double-tap zoom and the long-press menu
+  (`touch-action: manipulation`, `-webkit-touch-callout: none`).
 
 **Scoring: two axes, multiplied**
 - *Difficulty axis (the headline):*
@@ -143,6 +153,10 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
 - Why: the multiplier can't go below 1.0×, so on its own a misplace cost
   nothing at the floor and islands could be brute-forced cell by cell. A shared
   daily score needs wrong guesses to cost something.
+- The misses box is labelled **"Misses left"** and shows the count as a number
+  ("11 /12", red at 3 or fewer) beside 12 pips that go dim as they're used.
+  (Playtesters didn't read the earlier pips-only version, white dots turning
+  into red rings.)
 - Every placement and miss is recorded in order (`moves`: island / snap / miss)
   for the shareable result.
 - **A miss must read as costing the multiplier** (playtesters missed it when

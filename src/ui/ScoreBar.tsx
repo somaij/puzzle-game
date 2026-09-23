@@ -26,6 +26,8 @@ type Props = {
 const MISS_HOLD_MS = 300;
 const MISS_FADE_MS = 700;
 const MISS_SHAKE_MS = 360;
+/** At or below this many misses left, the count turns red. */
+const MISSES_LOW = 3;
 
 /** 12345 → "12,345" without relying on Intl, which not every JS engine ships in full. */
 export const withCommas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -73,11 +75,18 @@ export function ScoreBar({ score, multTenths, missesLeft, missFlash, decayCountd
 
   const missesBox = (
     <Animated.View style={[styles.box, compact && styles.grow, redBorder]}>
-      <Text style={styles.label}>Misses</Text>
-      <View testID="misses-left" accessibilityLabel={`${missesLeft} misses left`} style={styles.pips}>
-        {Array.from({ length: MISS_LIMIT }, (_, i) => (
-          <View key={i} style={[styles.pip, i >= missesLeft && styles.pipUsed]} />
-        ))}
+      <Text style={styles.label}>Misses left</Text>
+      {/* The number says it outright; the pips are the same count at a glance, a used one goes dim. */}
+      <View testID="misses-left" accessibilityLabel={`${missesLeft} of ${MISS_LIMIT} misses left`} style={styles.missesRow}>
+        <Text style={[styles.missesValue, missesLeft <= MISSES_LOW && styles.missesLow]}>
+          {missesLeft}
+          <Text style={styles.missesOf}> /{MISS_LIMIT}</Text>
+        </Text>
+        <View style={styles.pips}>
+          {Array.from({ length: MISS_LIMIT }, (_, i) => (
+            <View key={i} style={[styles.pip, i >= missesLeft && styles.pipUsed]} />
+          ))}
+        </View>
       </View>
     </Animated.View>
   );
@@ -195,7 +204,11 @@ const styles = StyleSheet.create({
   seconds: { color: colors.text, fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
   secondsOut: { color: colors.bad },
   timer: { position: 'absolute', left: 0, bottom: 0, height: 3, backgroundColor: colors.text, opacity: 0.75 },
-  pips: { flexDirection: 'row', gap: 4, paddingVertical: 4 },
-  pip: { width: 9, height: 9, borderRadius: 5, backgroundColor: colors.text },
-  pipUsed: { backgroundColor: 'transparent', borderColor: colors.bad, borderWidth: 1.5 },
+  missesRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  missesValue: { color: colors.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  missesOf: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  missesLow: { color: colors.bad },
+  pips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flexShrink: 1 },
+  pip: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.text },
+  pipUsed: { backgroundColor: colors.line },
 });

@@ -27,11 +27,11 @@ const RULES: { lead: string; text: string }[] = [
   },
   {
     lead: 'Place',
-    text: `You hold ${HAND_SIZE} pieces at a time; drag any of them onto the board. The right spot locks it in and a new piece from the deck takes its place. A wrong spot is a miss. Dropping it off the board just puts it back.`,
+    text: `You hold ${HAND_SIZE} pieces at a time; drag any of them onto the board, or tap one and then tap its spot. The right spot locks it in and a new piece from the deck takes its place. A wrong spot is a miss. Dropping it off the board just puts it back.`,
   },
   {
     lead: 'Hold',
-    text: 'Drag a piece onto the Hold slot to set it aside and draw a new one. Once per placement; holding when a piece is already there swaps them. You can play the held piece straight from the slot.',
+    text: 'Drag a piece onto the Hold slot (or tap it, then Hold) to set it aside and draw a new one. Once per placement; holding when a piece is already there swaps them. You can play the held piece straight from the slot.',
   },
   {
     lead: 'Islands and snaps',
@@ -47,7 +47,7 @@ const RULES: { lead: string; text: string }[] = [
   },
   {
     lead: 'Misses',
-    text: `You have ${MISS_LIMIT}. Run out and the puzzle ends.`,
+    text: `Dropping a piece on the wrong spot is a miss. You get ${MISS_LIMIT} per puzzle; the Misses left box counts down, and at zero the puzzle ends. Dropping off the board doesn't count.`,
   },
   {
     lead: 'Every day',

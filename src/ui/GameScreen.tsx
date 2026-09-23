@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
+  type GestureResponderHandlers,
   type ImageSourcePropType,
+  type ViewStyle,
 } from 'react-native';
 
 import { COLS, FLASH_MS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS } from '../engine/constants';
@@ -33,7 +36,7 @@ import { OnboardingModal } from './OnboardingModal';
 import { PhotoPreview } from './PhotoPreview';
 import { PieceSvg } from './PieceSvg';
 import { ScoreBar, withCommas } from './ScoreBar';
-import { usePieceDrag, type DropTarget } from './usePieceDrag';
+import { TAP_SLOP, usePieceDrag, type DropTarget } from './usePieceDrag';
 
 type Props = {
   puzzle: Puzzle;
@@ -55,6 +58,10 @@ const TICK_MS = 100;
 const DRAG_SCALE = 1.12;
 /** Bump this to make the onboarding popup show again for everyone (a content change, say). */
 const ONBOARDING_KEY = 'onboarding-seen-v1';
+
+// Web only: taps on the game shouldn't zoom the page (double-tap) or open the long-press menu.
+const noTouchZoomOnWeb =
+  Platform.OS === 'web' ? ({ touchAction: 'manipulation', WebkitTouchCallout: 'none' } as unknown as ViewStyle) : null;
 
 /** One monotonic clock for everything the engine times. */
 const now = () => performance.now();
@@ -148,30 +155,73 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   };
 
   const playing = game.status === 'playing';
+  const canPlay = playing && !onboardingVisible && !previewing;
+
+  const place = (piece: number, cell: number | null) => {
+    const { state, result, placement, miss } = dropPiece(game, piece, cell, now());
+    setGame(state);
+    if (placement) showPlacement(placement);
+    if (miss) showMiss(miss);
+    if (result === 'wrong') {
+      setWrongCell(cell);
+      clearTimeout(wrongTimer.current);
+      wrongTimer.current = setTimeout(() => setWrongCell(null), WRONG_FLASH_MS);
+    }
+    return result;
+  };
+
+  // Tap-to-place, the easier control on a phone: tap a hand (or held) piece to select it, then tap
+  // its cell, or the hold slot. A selected piece that has left the hand is no longer selected.
+  const [selected, setSelected] = useState<number | null>(null);
+  const selectedPiece =
+    canPlay && selected !== null && (game.hand.includes(selected) || game.hold === selected) ? selected : null;
+  const holdSelected = () => {
+    if (selectedPiece === null || selectedPiece === game.hold || !canHold(game)) return false;
+    setGame(holdPiece(game, selectedPiece, now()));
+    setSelected(null);
+    return true;
+  };
+
   const drag = usePieceDrag({
-    enabled: playing && !onboardingVisible && !previewing,
+    enabled: canPlay,
     pieceSize: dragPieceSize,
     targetAt,
     onStart: measureTargets,
+    onTap: (piece) => {
+      // With a hand piece selected, tapping the held piece means "hold this one" (swap them).
+      if (piece === game.hold && holdSelected()) return;
+      setSelected(piece === selectedPiece ? null : piece);
+    },
     onDrop: (piece, target) => {
-      if (target?.kind === 'hold') {
-        setGame(holdPiece(game, piece, now()));
-        return;
-      }
-      const cell = target?.cell ?? null;
-      const { state, result, placement, miss } = dropPiece(game, piece, cell, now());
-      setGame(state);
-      if (placement) showPlacement(placement);
-      if (miss) showMiss(miss);
-      if (result === 'wrong') {
-        setWrongCell(cell);
-        clearTimeout(wrongTimer.current);
-        wrongTimer.current = setTimeout(() => setWrongCell(null), WRONG_FLASH_MS);
-      }
+      setSelected(null);
+      if (target?.kind === 'hold') setGame(holdPiece(game, piece, now()));
+      else place(piece, target?.cell ?? null);
     },
   });
 
+  // Taps on the board while a piece is selected. A press that moves (a scroll) doesn't count.
+  const boardPress = useRef({ x: 0, y: 0 });
+  const boardHandlers: GestureResponderHandlers | undefined =
+    selectedPiece === null
+      ? undefined
+      : {
+          onStartShouldSetResponder: () => true,
+          onResponderGrant: (e) => {
+            measureTargets();
+            boardPress.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+          },
+          onResponderRelease: (e) => {
+            const { pageX, pageY } = e.nativeEvent;
+            if (Math.hypot(pageX - boardPress.current.x, pageY - boardPress.current.y) >= TAP_SLOP) return;
+            const target = targetAt(pageX, pageY);
+            if (target?.kind !== 'cell') return;
+            // A wrong cell deselects, so a double tap can't cost two misses; a filled one is ignored.
+            if (place(selectedPiece, target.cell) !== 'returned') setSelected(null);
+          },
+        };
+
   const restart = () => {
+    setSelected(null);
     setFloats([]);
     setMissFlash(null);
     setPreviewing(true);
@@ -179,7 +229,7 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, noTouchZoomOnWeb]}>
       {/* Scrolls so the rules can sit below the game. Drags on a piece don't scroll (see usePieceDrag). */}
       <ScrollView style={styles.scroll} contentContainerStyle={styles.screen}>
         <View style={[styles.layout, wide ? styles.layoutWide : styles.layoutNarrow]}>
@@ -248,6 +298,7 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
                 width={boardWidth}
                 hoverCell={drag.hoverCell}
                 wrongCell={wrongCell}
+                touchHandlers={boardHandlers}
               >
                 {previewing && !onboardingVisible && <PhotoPreview image={image} ms={FLASH_MS} onDone={endPreview} />}
               </Board>
@@ -280,7 +331,9 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
             canHold={canHold(game)}
             dragHandlers={drag.handlersFor}
             dragged={drag.dragged}
-            holdHovered={drag.hoverHold && drag.dragged !== game.hold}
+            selected={selectedPiece}
+            onHoldPress={holdSelected}
+            holdHovered={(drag.hoverHold && drag.dragged !== game.hold) || (selectedPiece !== null && selectedPiece !== game.hold)}
             showPieces={!previewing}
             holdRef={holdRef}
             compactWidth={wide ? undefined : boardWidth}
