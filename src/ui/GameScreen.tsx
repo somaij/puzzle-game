@@ -74,21 +74,24 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
 
   // Shown once per browser (see storage.ts), or any time from the header's "?" button.
   const [onboardingVisible, setOnboardingVisible] = useState(() => getStoredFlag(ONBOARDING_KEY) !== '1');
+  // Each board waits on a Start button ('ready'), then shows the finished photo briefly
+  // ('previewing'), then play and its clocks start ('playing'). The photo only shows once the
+  // player asks for it, so opening the page (or switching puzzles) while looking away wastes nothing.
+  const [phase, setPhase] = useState<'ready' | 'previewing' | 'playing'>('ready');
+  const started = phase === 'playing';
+  const startPreview = () => setPhase('previewing');
+  const endPreview = useCallback(() => {
+    setPhase('playing');
+    setGame(newGame(puzzle, now()));
+  }, [puzzle]);
+
   const dismissOnboarding = () => {
     setStoredFlag(ONBOARDING_KEY, '1');
     setOnboardingVisible(false);
-    // Reading time before the very first move shouldn't burn the fast-placement window or start
-    // the stall decay early, so give an untouched game's clocks a fresh start.
-    setGame((g) => (g.placedCount === 0 && g.misses === 0 ? newGame(puzzle, now()) : g));
+    // The popup's "Start playing" is the first visit's Start button, so that's one tap, not two.
+    // Reopened mid-game from "?", it just closes.
+    if (phase === 'ready') startPreview();
   };
-
-  // Each board opens with the finished photo, shown briefly (after the onboarding popup, if
-  // that's up). Play, and its clocks, start when it hides.
-  const [previewing, setPreviewing] = useState(true);
-  const endPreview = useCallback(() => {
-    setPreviewing(false);
-    setGame(newGame(puzzle, now()));
-  }, [puzzle]);
 
   // Flow decay and pulse fade depend on time passing, not just on moves.
   useEffect(() => {
@@ -155,7 +158,7 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   };
 
   const playing = game.status === 'playing';
-  const canPlay = playing && !onboardingVisible && !previewing;
+  const canPlay = playing && !onboardingVisible && started;
 
   const place = (piece: number, cell: number | null) => {
     const { state, result, placement, miss } = dropPiece(game, piece, cell, now());
@@ -224,7 +227,8 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
     setSelected(null);
     setFloats([]);
     setMissFlash(null);
-    setPreviewing(true);
+    // Pressing Restart is itself the go-ahead, so skip the Start button.
+    setPhase('previewing');
     setGame(newGame(puzzle, now()));
   };
 
@@ -300,8 +304,28 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
                 wrongCell={wrongCell}
                 touchHandlers={boardHandlers}
               >
-                {previewing && !onboardingVisible && <PhotoPreview image={image} ms={FLASH_MS} onDone={endPreview} />}
+                {phase === 'previewing' && !onboardingVisible && (
+                  <PhotoPreview image={image} ms={FLASH_MS} onDone={endPreview} />
+                )}
               </Board>
+              {phase === 'ready' && !onboardingVisible && (
+                <View style={styles.overlay}>
+                  <View testID="start-card" style={styles.endCard}>
+                    <Text style={styles.endTitle}>Puzzle #{puzzle.number}</Text>
+                    <Text style={[styles.endText, styles.startText]}>
+                      The photo shows for {FLASH_MS / 1000} seconds, then hides. Memorise it!
+                    </Text>
+                    <Pressable
+                      testID="start-button"
+                      accessibilityRole="button"
+                      style={[styles.button, styles.primaryButton, styles.startButton]}
+                      onPress={startPreview}
+                    >
+                      <Text style={[styles.primaryButtonText, styles.startButtonText]}>Start puzzle</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
               {/* A small card, so the finished picture stays visible. */}
               {!playing && (
                 <View style={styles.overlay}>
@@ -334,7 +358,7 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
             selected={selectedPiece}
             onHoldPress={holdSelected}
             holdHovered={(drag.hoverHold && drag.dragged !== game.hold) || (selectedPiece !== null && selectedPiece !== game.hold)}
-            showPieces={!previewing}
+            showPieces={started}
             holdRef={holdRef}
             compactWidth={wide ? undefined : boardWidth}
           />
@@ -427,5 +451,8 @@ const styles = StyleSheet.create({
   endTitle: { color: colors.text, fontSize: 24, fontWeight: '800' },
   endScore: { color: colors.gold, fontSize: 30, fontWeight: '700', fontVariant: ['tabular-nums'] },
   endText: { color: colors.muted, fontSize: 14 },
+  startText: { textAlign: 'center', maxWidth: 240, marginTop: 2 },
+  startButton: { marginTop: 10, paddingVertical: 11, paddingHorizontal: 28 },
+  startButtonText: { fontSize: 16 },
   dragLayer: { position: 'absolute', left: 0, top: 0, pointerEvents: 'none' },
 });

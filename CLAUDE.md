@@ -62,7 +62,11 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   each piece is drawn in a box padded **18%** (`PAD`) on every side so tabs and
   outlines aren't clipped.
 - **The photo is shown once, before play** (`FLASH_MS` = 10000, with a
-  countdown; `PhotoPreview`), then hidden for the rest of the game. No
+  countdown; `PhotoPreview`), then hidden for the rest of the game. It starts
+  only when the player taps **Start puzzle** (a card on the board), so opening
+  the page or switching puzzles while looking away doesn't burn it. On a first
+  visit the onboarding popup's "Start playing" is that tap; Restart and "Try
+  again" skip the card and go straight to the photo. No
   persistent reference, and nothing on drop reveals correctness: the player
   reads the fragment + cut (and what they remember) to place. The game's clocks
   start when the preview hides, and the hand is kept hidden until then.
