@@ -1,5 +1,15 @@
 import { indexOf } from '../cuts';
-import { DECAY_TICK_MS, FAST_MS, HAND_SIZE, MISS_LIMIT, PIECE_COUNT, PULSE_MS, STALL_MS } from '../constants';
+import {
+  DECAY_TICK_MS,
+  FAST_MS,
+  HAND_SIZE,
+  MISS_LIMIT,
+  MULT_MAX_TENTHS,
+  PIECE_COUNT,
+  PULSE_MS,
+  STALL_MS,
+  UNUSED_MISS_POINTS,
+} from '../constants';
 import { createPuzzle, type Puzzle } from '../daily';
 import {
   canHold,
@@ -201,11 +211,37 @@ describe('scoring', () => {
     expect(state.multTenths).toBe(11);
   });
 
-  it('caps the multiplier at 1.5×', () => {
+  it('caps the multiplier at MULT_MAX_TENTHS', () => {
     let game = newGame(rowMajor, 0);
-    for (let i = 0; i < 8; i++) game = placeLowest(game, i * 100);
-    expect(game.multTenths).toBe(15);
-    expect(dropPiece(game, 8, 8, 900).placement?.points).toBe(38);
+    for (let i = 0; i < 14; i++) game = placeLowest(game, i * 100);
+    expect(game.multTenths).toBe(MULT_MAX_TENTHS);
+    expect(dropPiece(game, 14, 14, 1500).placement?.points).toBe(pointsFor(25, MULT_MAX_TENTHS));
+  });
+
+  it('pays UNUSED_MISS_POINTS per unused miss on the win, and only then', () => {
+    let game = newGame(rowMajor, 0);
+    game = dropPiece(game, 0, 5, 0).state; // two misses
+    game = dropPiece(game, 0, 6, 0).state;
+    let placementPoints = 0;
+    while (game.placedCount < PIECE_COUNT - 1) {
+      const before = game.score;
+      game = placeLowest(game);
+      placementPoints += game.score - before;
+      expect(game.missBonus).toBe(0);
+    }
+    const last = dropPiece(game, PIECE_COUNT - 1, PIECE_COUNT - 1, 0);
+    const bonus = (MISS_LIMIT - 2) * UNUSED_MISS_POINTS;
+    expect(last.state.status).toBe('won');
+    expect(last.state.missBonus).toBe(bonus);
+    expect(last.state.score).toBe(placementPoints + last.placement!.points + bonus);
+  });
+
+  it('pays no miss bonus when the game ends out of misses', () => {
+    let game = newGame(rowMajor, 0);
+    for (let i = 0; i < MISS_LIMIT; i++) game = dropPiece(game, 0, 5, 0).state;
+    expect(game.status).toBe('failed');
+    expect(game.missBonus).toBe(0);
+    expect(game.score).toBe(0);
   });
 
   it('decides island or snap from what is already placed, whichever hand piece is played', () => {

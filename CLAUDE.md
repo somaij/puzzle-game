@@ -139,7 +139,8 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
     real read/gamble. Base **100**.
   - **Snap** = touches at least one placed piece. Easier, deducible. Base **25**.
 - *Tempo axis (the flow multiplier, shown to players as "×1.3" beside the score):*
-  - Range **1.0×–1.5×**. Starts at 1.0.
+  - Range **1.0×–2.0×** (was 1.5×; raised so fast play keeps paying past
+    the fifth placement). Starts at 1.0.
   - **Score and multiplier share one box** (simpler than two): "Score" and the
     value on the left, the multiplier ("×1.3") top right, and its gold meter
     running beside the score value. Misses left is its own slim box below
@@ -160,8 +161,18 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
     1000 ms** back toward 1.0.
   - A misplace costs **−0.1** (and one miss, below).
 - **Points per placement = round(base × multiplier).**
-- Design intent: island vs. snap is the star; flow is seasoning. Keep the
-  island/snap gap the primary score lever, not the multiplier.
+- **Unused misses pay 50 each on the win** (`UNUSED_MISS_POINTS`; stored as
+  `missBonus` and included in `score`; the end card shows "Includes +550 for
+  11 unused misses"). None on a fail, which has none left anyway.
+- Design intent was "island vs. snap is the star; flow is seasoning". A score
+  simulation (500 deals, hand of 3, scripted players) found that in practice
+  the hand limits island play (island-seeking places ~7.0 islands a game,
+  snap-seeking ~3.9), so the multiplier was already the bigger lever, and a
+  fast guesser with 10 misses scored within 3% of a careful player. Hence
+  the ×2.0 cap and the unused-miss bonus. Uncapping was rejected: it turned
+  the score into a speed test (a fast all-snap player beat a slow island
+  player by 46%). Still open: raising islands to 150 would restore them as
+  the main lever.
 
 **Misses (Wordle-style limit)**
 - Each puzzle allows **12 wrong drops** (`MISS_LIMIT`). The 12th ends the game
@@ -214,7 +225,7 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   when the deck is empty, and a held piece stays playable from the hold slot.
   (The POC ends "solved" at 23/24 whenever hold was used, and locks up if you
   hold the very last piece into an empty slot.)
-- **Multiplier in whole tenths.** Store it as an integer 10–15 and score as
+- **Multiplier in whole tenths.** Store it as an integer 10–20 and score as
   `round(base × tenths / 10)` in integer maths. (The POC's float drifts: 1.3×
   reached going up pays a snap 33, reached going down pays 32.)
 
@@ -335,7 +346,7 @@ Run typecheck, lint and tests before calling a task done.
   pieces). Is 10 s right, and does it make islands too easy?
 - **Is the fast window too easy to keep with a hand?** "Fast" is now 3 s
   since the previous placement, and with 3 pieces to choose from the next
-  snap is usually obvious, so a steady player may sit at 1.5× most of the
+  snap is usually obvious, so a steady player may sit at the cap (now 2.0×) most of the
   game. Watch in playtesting; the knob is `FAST_MS`.
 - **Daily image supply.** Starting with the owner's own landscape photos
   (plenty to begin with). Later sources: CC0 museum collections (The Met, Art

@@ -14,6 +14,7 @@ import {
   ROWS,
   SNAP_POINTS,
   STALL_MS,
+  UNUSED_MISS_POINTS,
   WRONG_PENALTY_TENTHS,
 } from './constants';
 import { indexOf, rowColOf } from './cuts';
@@ -45,7 +46,10 @@ export type GameState = {
   placedCount: number;
   /** `failed` = out of misses. */
   status: 'playing' | 'won' | 'failed';
+  /** Includes `missBonus` once won. */
   score: number;
+  /** Points for unused misses (UNUSED_MISS_POINTS each), added to the score on the win; 0 until then. */
+  missBonus: number;
   /** Flow multiplier in whole tenths: 10 = 1.0×. */
   multTenths: number;
   misses: number;
@@ -79,6 +83,7 @@ export function newGame(puzzle: Puzzle, now: number): GameState {
     placedCount: 0,
     status: 'playing',
     score: 0,
+    missBonus: 0,
     multTenths: MULT_MIN_TENTHS,
     misses: 0,
     lastPlacedAt: now,
@@ -207,6 +212,8 @@ export function dropPiece(
   const placed = s.placed.slice();
   placed[cell] = true;
   const placedCount = s.placedCount + 1;
+  const won = placedCount === PIECE_COUNT;
+  const missBonus = won ? (MISS_LIMIT - s.misses) * UNUSED_MISS_POINTS : 0;
 
   const fromHold = s.hold === piece;
   const { hand, deck } = fromHold ? { hand: s.hand, deck: s.deck } : refillSlot(s, piece);
@@ -231,8 +238,9 @@ export function dropPiece(
       holdUsed: false,
       placed,
       placedCount,
-      status: placedCount === PIECE_COUNT ? 'won' : 'playing',
-      score: s.score + points,
+      status: won ? 'won' : 'playing',
+      score: s.score + points + missBonus,
+      missBonus,
       multTenths,
       lastPlacedAt: now,
       decaySteps: 0,

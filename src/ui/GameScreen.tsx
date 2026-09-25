@@ -13,7 +13,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { COLS, FLASH_MS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS } from '../engine/constants';
+import { COLS, FLASH_MS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS, UNUSED_MISS_POINTS } from '../engine/constants';
 import { indexOf, rowColOf } from '../engine/cuts';
 import type { Puzzle } from '../engine/daily';
 import {
@@ -337,6 +337,12 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
                         ? `All ${PIECE_COUNT} pieces placed.`
                         : `${game.placedCount} of ${PIECE_COUNT} pieces placed.`}
                     </Text>
+                    {game.missBonus > 0 && (
+                      <Text testID="miss-bonus" style={styles.endText}>
+                        Includes <Text style={styles.bonusValue}>+{withCommas(game.missBonus)}</Text> for{' '}
+                        {game.missBonus / UNUSED_MISS_POINTS} unused {game.missBonus === UNUSED_MISS_POINTS ? 'miss' : 'misses'}.
+                      </Text>
+                    )}
                     <Pressable style={[styles.button, styles.primaryButton]} onPress={restart}>
                       <Text style={styles.primaryButtonText}>{game.status === 'won' ? 'Play again' : 'Try again'}</Text>
                     </Pressable>
@@ -451,6 +457,7 @@ const styles = StyleSheet.create({
   endTitle: { color: colors.text, fontSize: 24, fontWeight: '800' },
   endScore: { color: colors.gold, fontSize: 30, fontWeight: '700', fontVariant: ['tabular-nums'] },
   endText: { color: colors.muted, fontSize: 14 },
+  bonusValue: { color: colors.gold, fontWeight: '700' },
   startText: { textAlign: 'center', maxWidth: 240, marginTop: 2 },
   startButton: { marginTop: 10, paddingVertical: 11, paddingHorizontal: 28 },
   startButtonText: { fontSize: 16 },

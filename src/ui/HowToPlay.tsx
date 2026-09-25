@@ -13,6 +13,7 @@ import {
   PULSE_MS,
   SNAP_POINTS,
   STALL_MS,
+  UNUSED_MISS_POINTS,
   WRONG_PENALTY_TENTHS,
 } from '../engine/constants';
 import { colors } from './colors';
@@ -52,7 +53,7 @@ const RULES: { lead: string; text: string }[] = [
   },
   {
     lead: 'Misses',
-    text: `Dropping a piece on the wrong spot is a miss. You get ${MISS_LIMIT} per puzzle; the Misses left box counts down, and at zero the puzzle ends. Dropping off the board doesn't count.`,
+    text: `Dropping a piece on the wrong spot is a miss. You get ${MISS_LIMIT} per puzzle; the Misses left box counts down, and at zero the puzzle ends. Dropping off the board doesn't count. Finish the puzzle and every miss you didn't use is worth ${UNUSED_MISS_POINTS} points.`,
   },
   {
     lead: 'Every day',
