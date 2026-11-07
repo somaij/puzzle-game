@@ -1,10 +1,13 @@
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { createPuzzle, imageIndexFor, puzzleNumber } from './src/engine/daily';
 import { PUZZLE_IMAGES } from './src/puzzleImages';
+import { colors } from './src/ui/colors';
 import { GameScreen } from './src/ui/GameScreen';
+import { FONT_FILES } from './src/ui/type';
 
 const onWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 
@@ -26,6 +29,9 @@ function initialPuzzleNumber(): number {
 export default function App() {
   const [number, setNumber] = useState(initialPuzzleNumber);
   const puzzle = useMemo(() => createPuzzle(number), [number]);
+  // The fonts are bundled and small, so wait for them rather than flash the system font.
+  // If one fails, carry on with the fallback rather than show a blank page.
+  const [fontsLoaded, fontError] = useFonts(FONT_FILES);
   const image = PUZZLE_IMAGES[imageIndexFor(puzzle.number, PUZZLE_IMAGES.length)];
 
   const selectPuzzle = (n: number) => {
@@ -37,6 +43,8 @@ export default function App() {
       window.history.replaceState(null, '', url);
     }
   };
+
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
 
   return (
     <>

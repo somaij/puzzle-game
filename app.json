@@ -23,6 +23,9 @@
     },
     "experiments": {
       "baseUrl": "/puzzle-game"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

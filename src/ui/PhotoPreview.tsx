@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 
-import { colors } from './colors';
+import { colors, overlays } from './colors';
+import { type } from './type';
 
 type Props = {
   image: ImageSourcePropType;
@@ -57,10 +58,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: 'rgba(14, 20, 28, 0.82)',
+    backgroundColor: overlays.badge,
     borderColor: colors.line,
     borderWidth: 1,
   },
-  badgeLabel: { color: colors.muted, fontSize: 12, fontWeight: '600' },
-  count: { color: colors.gold, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'], minWidth: 14, textAlign: 'center' },
+  badgeLabel: { ...type.small, color: colors.muted },
+  count: { ...type.valueCountdown, color: colors.accent, minWidth: 14, textAlign: 'center' },
 });

@@ -142,10 +142,10 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   - Range **1.0×–2.0×** (was 1.5×; raised so fast play keeps paying past
     the fifth placement). Starts at 1.0.
   - **Score and multiplier share one box** (simpler than two): "Score" and the
-    value on the left, the multiplier ("×1.3") top right, and its gold meter
+    value on the left, the multiplier ("×1.3") top right, and its meter
     running beside the score value. Misses left is its own slim box below
     (on wide screens, beside it).
-  - That box shows the level (gold meter) and **the time until the
+  - That box shows the level (the meter) and **the time until the
     multiplier drops**, both as seconds beside the meter ("3.2s", tenths,
     rounded up; "0.0s" in red while it is dropping) and as a line along the
     box's bottom edge. Both run from the last placement to the first decay
@@ -283,6 +283,15 @@ tenths); treat them as a starting point, not gospel.
 - **`src/engine/`: plain TypeScript, no React or React Native imports.** Rules,
   scoring, seeding, geometry. It must run unchanged on every platform and in
   Jest. Keep game logic here, not in components.
+- **Visual design:** the source is the Figma file "Daily Jigsaw – Game UI"
+  (indigo surfaces, one lemon accent for selection, points, the multiplier and
+  primary buttons; red only for misses). Colours live in `src/ui/colors.ts` and
+  text roles in `src/ui/type.ts`, both named to match the Figma variables and
+  text styles. Fonts: Varela Round (body, labels, buttons) and Shantell Sans
+  (titles, numbers, rising points), bundled in `assets/fonts/` under the OFL
+  (see its README for the Shantell subset). Each weight is its own
+  `fontFamily`; never set `fontWeight` on them. The pre-redesign look is kept
+  on the Figma page "Original (live game, fbc1043)".
 - **`src/ui/`: React Native components.** Pieces are drawn with
   **react-native-svg** (`<ClipPath>` + `<Image>`), not Skia: Skia's web build
   ships a multi-MB download, which is bad for a link tapped from a group chat.

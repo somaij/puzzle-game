@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import { MISS_LIMIT, MULT_MAX_TENTHS, MULT_MIN_TENTHS } from '../engine/constants';
 import { colors } from './colors';
+import { type } from './type';
 
 type Props = {
   score: number;
@@ -62,7 +63,7 @@ export function ScoreBar({ score, multTenths, missesLeft, missFlash, decayCountd
       { translateX: shaking.interpolate({ inputRange: [0, 0.2, 0.4, 0.6, 0.8, 1], outputRange: [0, -5, 5, -4, 3, 0] }) },
     ],
   };
-  const redValue = { color: flash.interpolate({ inputRange: [0, 1], outputRange: [colors.gold, colors.bad] }) };
+  const redValue = { color: flash.interpolate({ inputRange: [0, 1], outputRange: [colors.accent, colors.bad] }) };
 
   // Score and multiplier share one box: the multiplier is what the next placement's points are
   // multiplied by, so it sits right beside the score, with its meter and countdown.
@@ -104,21 +105,27 @@ export function ScoreBar({ score, multTenths, missesLeft, missFlash, decayCountd
     </Animated.View>
   );
 
+  const count = (
+    <Text style={[styles.missesValue, missesLeft <= MISSES_LOW && styles.missesLow]}>
+      {missesLeft}
+      <Text style={styles.missesOf}> /{MISS_LIMIT}</Text>
+    </Text>
+  );
+  // The number says it outright; the pips are the same count at a glance, a used one goes dim.
+  const pips = (
+    <View style={styles.pips}>
+      {Array.from({ length: MISS_LIMIT }, (_, i) => (
+        <View key={i} style={[styles.pip, i >= missesLeft && styles.pipUsed]} />
+      ))}
+    </View>
+  );
   const missesBox = (
     <Animated.View style={[styles.box, compact ? styles.missesBoxCompact : styles.missesBox, redBorder]}>
-      <Text style={styles.label}>Misses left</Text>
-      {/* The number says it outright; the pips are the same count at a glance, a used one goes dim. */}
-      <View testID="misses-left" accessibilityLabel={`${missesLeft} of ${MISS_LIMIT} misses left`} style={styles.missesRow}>
-        <Text style={[styles.missesValue, missesLeft <= MISSES_LOW && styles.missesLow]}>
-          {missesLeft}
-          <Text style={styles.missesOf}> /{MISS_LIMIT}</Text>
-        </Text>
-        <View style={styles.pips}>
-          {Array.from({ length: MISS_LIMIT }, (_, i) => (
-            <View key={i} style={[styles.pip, i >= missesLeft && styles.pipUsed]} />
-          ))}
-        </View>
+      <View testID="misses-left" accessibilityLabel={`${missesLeft} of ${MISS_LIMIT} misses left`} style={styles.missesHead}>
+        <Text style={styles.label}>Misses left</Text>
+        {count}
       </View>
+      {pips}
     </Animated.View>
   );
 
@@ -142,7 +149,12 @@ function DecayTimer({ from, until }: { from: number; until: number }) {
   }, [left, from, until]);
 
   const width = left.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
-  return <Animated.View testID="decay-timer" style={[styles.timer, { width }]} />;
+  // Inset to the box's padding, so the line runs along the flat part of the pill's bottom edge.
+  return (
+    <View style={styles.timerTrack}>
+      <Animated.View testID="decay-timer" style={[styles.timer, { width }]} />
+    </View>
+  );
 }
 
 /**
@@ -168,40 +180,42 @@ function DecaySeconds({ until }: { until: number }) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8 },
+  row: { flexDirection: 'row', gap: 16 },
   stack: { gap: 8 },
+  // Pill-shaped boxes, as in the Figma design.
   box: {
     backgroundColor: colors.surface,
     borderColor: colors.line,
     borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 24,
     gap: 3,
     justifyContent: 'center',
   },
   grow: { flex: 1 },
-  scoreBox: { gap: 4, paddingBottom: 10, overflow: 'hidden' },
+  scoreBox: { gap: 4, paddingTop: 12, paddingBottom: 16, overflow: 'hidden' },
   scoreHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
-  missesBox: { width: 230 },
-  missesBoxCompact: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  missesBox: { width: 230, alignItems: 'center', paddingTop: 4 },
+  missesBoxCompact: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  missesHead: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   valueGroup: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  label: { color: colors.muted, fontSize: 10, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
-  score: { color: colors.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  multiplier: { color: colors.gold, fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  lost: { color: colors.bad, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  label: { ...type.label, color: colors.muted },
+  score: { ...type.valueScore, color: colors.text },
+  multiplier: { ...type.valueMultiplier, color: colors.accent },
+  lost: { ...type.floatSmall, fontSize: 13, color: colors.bad },
   meterRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  meter: { height: 7, borderRadius: 4, backgroundColor: colors.goldSoft, overflow: 'hidden' },
-  meterFill: { height: '100%', borderRadius: 4, backgroundColor: colors.gold },
+  meter: { height: 7, borderRadius: 4, backgroundColor: colors.meterTrack, overflow: 'hidden' },
+  meterFill: { height: '100%', borderRadius: 4, backgroundColor: colors.accent },
   secondsSlot: { width: 34, alignItems: 'flex-end' },
-  seconds: { color: colors.text, fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  seconds: { ...type.smallTabular, color: colors.text },
   secondsOut: { color: colors.bad },
-  timer: { position: 'absolute', left: 0, bottom: 0, height: 3, backgroundColor: colors.text, opacity: 0.75 },
-  missesRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  missesValue: { color: colors.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  missesOf: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  timerTrack: { position: 'absolute', left: 24, right: 24, bottom: 0, height: 3 },
+  timer: { height: 3, borderRadius: 2, backgroundColor: colors.text, opacity: 0.75 },
+  missesValue: { ...type.valueScore, color: colors.text },
+  missesOf: { ...type.small, color: colors.muted },
   missesLow: { color: colors.bad },
-  pips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flexShrink: 1 },
+  pips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flexShrink: 1, justifyContent: 'center' },
   pip: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.text },
   pipUsed: { backgroundColor: colors.line },
 });

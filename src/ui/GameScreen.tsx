@@ -15,6 +15,7 @@ import {
 
 import { COLS, FLASH_MS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS, UNUSED_MISS_POINTS } from '../engine/constants';
 import { indexOf, rowColOf } from '../engine/cuts';
+import { PIECE_SCALE } from '../engine/geometry';
 import type { Puzzle } from '../engine/daily';
 import {
   canHold,
@@ -30,12 +31,13 @@ import {
 import { getStoredFlag, setStoredFlag } from '../storage';
 import { Board, type FloatText } from './Board';
 import { colors } from './colors';
-import { FeedPanel } from './FeedPanel';
+import { FeedPanel, SIDE_PANEL_WIDTH } from './FeedPanel';
 import { HowToPlay } from './HowToPlay';
 import { OnboardingModal } from './OnboardingModal';
 import { PhotoPreview } from './PhotoPreview';
 import { PieceSvg } from './PieceSvg';
 import { ScoreBar, withCommas } from './ScoreBar';
+import { type } from './type';
 import { TAP_SLOP, usePieceDrag, type DropTarget } from './usePieceDrag';
 
 type Props = {
@@ -49,8 +51,19 @@ type Props = {
 type Rect = { x: number; y: number; width: number; height: number };
 
 const WIDE_LAYOUT_MIN = 760;
-const PANEL_WIDTH = 240;
-const GAP = 20;
+/** Below this width the onboarding card stacks its steps. */
+const NARROW_CARD_MAX = 520;
+const PANEL_WIDTH = SIDE_PANEL_WIDTH;
+// Spacing (8-point scale): bigger gaps between groups than inside them.
+const GAP_WIDE = 24;
+const GAP_NARROW = 16;
+const SIDE_PADDING = 16;
+/** Header (32) + gap + score bar (79) + gap, above the board in the wide layout. */
+const ABOVE_BOARD = 32 + 16 + 79 + 16;
+/** The side panel's fixed parts: border, padding, header and its gap, controls and their gap, gaps between 3 slots. */
+const SIDE_PANEL_CHROME = 2 + 32 + 34 + 16 + 160 + 16 + 2 * 12;
+/** Largest hand slot on the side panel. */
+const SIDE_SLOT_MAX = 208;
 const WRONG_FLASH_MS = 300;
 /** How often the clocks (flow decay, ghost fade) are advanced. */
 const TICK_MS = 100;
@@ -109,7 +122,7 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
     setFloats((fs) => [...fs, ...added]);
   };
   const showPlacement = (p: Placement) => {
-    const lines = [{ text: `+${p.points}`, color: p.island ? colors.accent : colors.gold, large: p.island }];
+    const lines = [{ text: `+${p.points}`, color: colors.accent, large: p.island }];
     if (p.pulse) lines.push({ text: 'PULSE', color: colors.accent, large: false });
     showFloats(p.cell, lines);
   };
@@ -128,10 +141,15 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   // The board is as large as fits (3:2), leaving room for the header, score bar and, when narrow, the feed.
   const screen = useWindowDimensions();
   const wide = screen.width >= WIDE_LAYOUT_MIN;
+  const gap = wide ? GAP_WIDE : GAP_NARROW;
   const boardWidth = wide
-    ? Math.min(screen.width - 32 - PANEL_WIDTH - GAP, (screen.height - 160) * (COLS / ROWS), 900)
-    : Math.min(screen.width - 32, (screen.height - 390) * (COLS / ROWS));
+    ? Math.min(screen.width - 2 * SIDE_PADDING - PANEL_WIDTH - gap, (screen.height - ABOVE_BOARD - 64) * (COLS / ROWS), 900)
+    : Math.min(screen.width - 2 * SIDE_PADDING, (screen.height - 400) * (COLS / ROWS));
   const cell = boardWidth / COLS;
+  // Side panel: a hand piece drawn about the size it will be on the board, as long as three fit
+  // beside the board column with the controls under them.
+  const columnHeight = ABOVE_BOARD + (boardWidth / COLS) * ROWS + 2;
+  const sideSlot = Math.floor(Math.min(SIDE_SLOT_MAX, cell * PIECE_SCALE, (columnHeight - SIDE_PANEL_CHROME) / 3));
   const dragPieceSize = Math.max(48, cell * DRAG_SCALE);
 
   // Where the board and hold slot are on screen, for turning a drop point into a target.
@@ -235,9 +253,9 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   return (
     <View style={[styles.root, noTouchZoomOnWeb]}>
       {/* Scrolls so the rules can sit below the game. Drags on a piece don't scroll (see usePieceDrag). */}
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.screen}>
-        <View style={[styles.layout, wide ? styles.layoutWide : styles.layoutNarrow]}>
-          <View style={[styles.boardColumn, { width: boardWidth }]}>
+      <ScrollView style={styles.scroll} contentContainerStyle={[styles.screen, wide ? styles.screenWide : styles.screenNarrow]}>
+        <View style={[{ gap }, wide ? styles.layoutWide : styles.layoutNarrow]}>
+          <View style={[styles.boardColumn, { width: boardWidth, gap: wide ? 16 : 12 }]}>
             <View style={styles.header}>
               <View style={styles.headerLeft}>
                 <Pressable
@@ -367,10 +385,11 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
             showPieces={started}
             holdRef={holdRef}
             compactWidth={wide ? undefined : boardWidth}
+            sideSlot={wide ? sideSlot : undefined}
           />
         </View>
 
-        <HowToPlay width={wide ? boardWidth + GAP + PANEL_WIDTH : boardWidth} />
+        <HowToPlay width={wide ? boardWidth + gap + PANEL_WIDTH : boardWidth} wide={wide} cuts={puzzle.cuts} />
       </ScrollView>
 
       {/* The dragged copy, in window coordinates, so it sits in an unpadded root at the window origin. */}
@@ -387,7 +406,13 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
       )}
 
       {/* Covers the viewport (not the full scroll height), and its own backdrop blocks clicks and wheel-scroll underneath. */}
-      <OnboardingModal visible={onboardingVisible} onDismiss={dismissOnboarding} />
+      <OnboardingModal
+        visible={onboardingVisible}
+        onDismiss={dismissOnboarding}
+        cuts={puzzle.cuts}
+        image={image}
+        narrow={screen.width < NARROW_CARD_MAX}
+      />
     </View>
   );
 }
@@ -396,31 +421,26 @@ const styles = StyleSheet.create({
   root: { flex: 1, userSelect: 'none' },
   scroll: { flex: 1, backgroundColor: colors.background },
   // Grows to at least the screen height, so the game stays centred when everything fits.
-  screen: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    gap: 28,
-  },
-  layout: { gap: GAP },
-  layoutWide: { flexDirection: 'row', alignItems: 'flex-start' },
+  screen: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SIDE_PADDING },
+  screenWide: { paddingTop: 32, paddingBottom: 48, gap: 40 },
+  screenNarrow: { paddingTop: 20, paddingBottom: 32, gap: 32 },
+  layoutWide: { flexDirection: 'row', alignItems: 'stretch' },
   layoutNarrow: { flexDirection: 'column', alignItems: 'stretch' },
-  boardColumn: { gap: 10 },
+  boardColumn: {},
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  title: { color: colors.text, fontSize: 20, fontWeight: '800' },
-  count: { color: colors.muted, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  title: { ...type.titleScreen, color: colors.text },
+  count: { ...type.valueCount, color: colors.muted },
   button: {
     backgroundColor: colors.surface,
     borderColor: colors.line,
     borderWidth: 1,
-    borderRadius: 9,
+    borderRadius: 999,
     paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
-  buttonText: { color: colors.muted, fontSize: 13, fontWeight: '600' },
+  buttonText: { ...type.button, color: colors.muted },
   helpButton: {
     width: 26,
     height: 26,
@@ -431,10 +451,10 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderWidth: 1,
   },
-  helpButtonText: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  helpButtonText: { ...type.glyph, color: colors.muted },
   disabled: { opacity: 0.35 },
   primaryButton: { backgroundColor: colors.accent, borderColor: colors.accent, marginTop: 6 },
-  primaryButtonText: { color: '#06201d', fontSize: 14, fontWeight: '700' },
+  primaryButtonText: { ...type.buttonPrimary, color: colors.onAccent },
   overlay: {
     position: 'absolute',
     top: 0,
@@ -449,17 +469,17 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 16,
     paddingHorizontal: 28,
-    borderRadius: 12,
-    backgroundColor: 'rgba(14, 20, 28, 0.86)',
+    borderRadius: 16,
+    backgroundColor: colors.background,
     borderColor: colors.line,
     borderWidth: 1,
   },
-  endTitle: { color: colors.text, fontSize: 24, fontWeight: '800' },
-  endScore: { color: colors.gold, fontSize: 30, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  endText: { color: colors.muted, fontSize: 14 },
-  bonusValue: { color: colors.gold, fontWeight: '700' },
+  endTitle: { ...type.titleCard, color: colors.text },
+  endScore: { ...type.valueEndScore, color: colors.accent },
+  endText: { ...type.body, color: colors.muted },
+  bonusValue: { color: colors.accent },
   startText: { textAlign: 'center', maxWidth: 240, marginTop: 2 },
   startButton: { marginTop: 10, paddingVertical: 11, paddingHorizontal: 28 },
-  startButtonText: { fontSize: 16 },
+  startButtonText: { ...type.buttonLarge },
   dragLayer: { position: 'absolute', left: 0, top: 0, pointerEvents: 'none' },
 });

@@ -16,6 +16,7 @@ import type { Ghost } from '../engine/game';
 import { PIECE_OFFSET, PIECE_SCALE } from '../engine/geometry';
 import { colors } from './colors';
 import { PieceSvg } from './PieceSvg';
+import { type } from './type';
 
 /** Text that rises and fades over a cell, e.g. "+110" or "PULSE". */
 export type FloatText = { id: number; cell: number; text: string; color: string; large: boolean; line: number };
@@ -129,13 +130,15 @@ function RisingText({ float, cell, onDone }: { float: FloatText; cell: number; o
   }, [progress, float.id, onDone]);
 
   const [row, col] = rowColOf(float.cell);
-  const fontSize = float.large ? 19 : 15;
+  const role = float.large ? type.floatLarge : type.floatSmall;
+  const fontSize = role.fontSize;
   const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [0, -cell * 0.9] });
   const opacity = progress.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 1, 0] });
   return (
     <Animated.Text
       style={[
         styles.float,
+        role,
         textShadow,
         {
           // Two cells wide and centred on the cell, so the text never wraps.
@@ -156,8 +159,9 @@ function RisingText({ float, cell, onDone }: { float: FloatText; cell: number; o
 
 const styles = StyleSheet.create({
   // The border sits on an outer frame so the play area inside is exactly COLS × ROWS cells.
-  frame: { borderColor: colors.line, borderWidth: FRAME_BORDER, borderRadius: 5, alignSelf: 'flex-start' },
-  board: { backgroundColor: colors.board, borderRadius: 4, overflow: 'hidden' },
+  // The play area is the page colour: the board is one surface with the page, marked by its border.
+  frame: { borderColor: colors.line, borderWidth: FRAME_BORDER, borderRadius: 7, alignSelf: 'flex-start' },
+  board: { backgroundColor: colors.background, borderRadius: 6, overflow: 'hidden' },
   piece: { position: 'absolute' },
   outline: { position: 'absolute', borderRadius: 4, pointerEvents: 'none' },
   hover: { borderWidth: 2, borderColor: colors.muted },
@@ -165,8 +169,6 @@ const styles = StyleSheet.create({
   float: {
     position: 'absolute',
     textAlign: 'center',
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
     pointerEvents: 'none',
   },
 });
