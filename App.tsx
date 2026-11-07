@@ -12,8 +12,9 @@ import { FONT_FILES } from './src/ui/type';
 const onWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 
 /**
- * The puzzles you can switch between (a testing aid until checkpoint 4 decides what players can
- * reach): every day up to today, and far enough ahead to reach every bundled photo.
+ * The puzzles `?puzzle=N` can open (a testing aid until checkpoint 4 decides what players can
+ * reach): every day up to today, and far enough ahead to reach every bundled photo. The ‹ ›
+ * switcher was removed from the screen in the quieter design; the URL still works.
  */
 const lastPuzzle = Math.max(puzzleNumber(new Date()), PUZZLE_IMAGES.length);
 
@@ -27,29 +28,18 @@ function initialPuzzleNumber(): number {
 }
 
 export default function App() {
-  const [number, setNumber] = useState(initialPuzzleNumber);
+  const [number] = useState(initialPuzzleNumber);
   const puzzle = useMemo(() => createPuzzle(number), [number]);
   // The fonts are bundled and small, so wait for them rather than flash the system font.
   // If one fails, carry on with the fallback rather than show a blank page.
   const [fontsLoaded, fontError] = useFonts(FONT_FILES);
   const image = PUZZLE_IMAGES[imageIndexFor(puzzle.number, PUZZLE_IMAGES.length)];
 
-  const selectPuzzle = (n: number) => {
-    setNumber(n);
-    // Keep the choice in the URL, so a reload (or a shared link) opens the same puzzle.
-    if (onWeb) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('puzzle', String(n));
-      window.history.replaceState(null, '', url);
-    }
-  };
-
   if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
 
   return (
     <>
-      {/* Keyed by number, so switching starts a fresh game (and its photo preview). */}
-      <GameScreen key={number} puzzle={puzzle} image={image} lastPuzzle={lastPuzzle} onSelectPuzzle={selectPuzzle} />
+      <GameScreen puzzle={puzzle} image={image} />
       <StatusBar style="light" />
     </>
   );

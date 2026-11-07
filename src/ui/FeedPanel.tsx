@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react';
+import type { Ref } from 'react';
 import {
   Platform,
   Pressable,
@@ -13,7 +13,6 @@ import {
 import { HOLD_SLOT } from '../engine/constants';
 import { rowColOf, type Cut } from '../engine/cuts';
 import { colors } from './colors';
-import { Arrow, Chip, MiniSlot, NumberBadge, PhotoPiece, ReturnArrow, ShapePiece, spotShape } from './Pictures';
 import { PieceSvg } from './PieceSvg';
 import { Rich } from './Rich';
 import { type } from './type';
@@ -24,7 +23,6 @@ type Props = {
   /** The playable hand; null slots are empty (the deck has run out). */
   hand: readonly (number | null)[];
   hold: number | null;
-  deckCount: number;
   /** Whether a hand piece can be dropped on the hold slot right now. */
   canHold: boolean;
   /** Drag handlers for a playable piece (hand or hold). */
@@ -39,6 +37,8 @@ type Props = {
   holdHovered: boolean;
   /** False while the photo is previewed: the slots show empty until play starts. */
   showPieces: boolean;
+  /** Until the first placement: a one-line reminder of how to move a piece. */
+  showControls: boolean;
   /** Attached to the hold slot, for measuring it as a drop target. */
   holdRef?: Ref<View>;
   /** On narrow screens the feed is one row under the board, this many px wide. Omit for the side panel. */
@@ -65,9 +65,8 @@ const draggableOnWeb =
   Platform.OS === 'web' ? ({ cursor: 'grab', touchAction: 'none', userSelect: 'none' } as unknown as ViewStyle) : null;
 
 /**
- * The hand of playable pieces, the hold slot, how many pieces are left to deal, and how to move
- * a piece. Wide screens: a column beside the board, slots stacked, controls as picture rows.
- * Narrow screens: one row under the board, controls as one line.
+ * The hand of playable pieces and the hold slot. Wide screens: a column beside the board, slots
+ * stacked. Narrow screens: one row right under the board.
  */
 export function FeedPanel(props: Props) {
   const {
@@ -75,7 +74,6 @@ export function FeedPanel(props: Props) {
     image,
     hand,
     hold,
-    deckCount,
     canHold,
     dragHandlers,
     dragged,
@@ -83,6 +81,7 @@ export function FeedPanel(props: Props) {
     onHoldPress,
     holdHovered,
     showPieces,
+    showControls,
     holdRef,
     compactWidth,
     sideSlot,
@@ -102,19 +101,19 @@ export function FeedPanel(props: Props) {
 
   return (
     <View style={[styles.panel, compact ? styles.panelCompact : styles.panelSide]}>
-      {/* Side panel: the label above the hint, which is too long to share the narrow column. */}
-      <View style={compact ? styles.headerRow : styles.headerStack}>
-        <Text style={styles.label}>Your hand</Text>
-        {selected === null ? (
-          <Text testID="deck-count" style={styles.deckCount}>
-            {deckCount} left in deck
-          </Text>
-        ) : (
+      {/* No label or deck count: the pieces speak for themselves. One line of help, only while it
+          helps, as a tab on the panel's top edge so it takes no space and nothing jumps. */}
+      {selected !== null ? (
+        <View style={styles.tab}>
           <Text testID="tap-hint" style={styles.hint}>
             Tap its spot on the board
           </Text>
-        )}
-      </View>
+        </View>
+      ) : showControls ? (
+        <View style={styles.tab}>
+          <Rich testID="controls" style={styles.controlsLine} text="[Drag] a piece, or [tap] it then its spot" />
+        </View>
+      ) : null}
       <View style={[compact ? styles.slotsRow : styles.slotsColumn, { gap: compact ? COMPACT_GAP : SIDE_GAP }]}>
         {hand.map((piece, i) => (
           <View
@@ -146,59 +145,6 @@ export function FeedPanel(props: Props) {
           </Pressable>
         )}
       </View>
-      {compact ? (
-        <Rich
-          testID="controls"
-          style={styles.controlsLine}
-          text="[Drag] it onto its spot, or [tap it, then tap its spot]. Off the board is free."
-        />
-      ) : (
-        <Controls cuts={cuts} image={image} />
-      )}
-    </View>
-  );
-}
-
-/** The cell whose piece the controls show. Fixed, so the pictures don't change mid-game. */
-const DEMO: [number, number] = [2, 4];
-const DEMO_SIZE = 30;
-
-/** How to move a piece, right where it's needed: three small picture rows under the hand. */
-function Controls({ cuts, image }: { cuts: Cut[]; image: ImageSourcePropType }) {
-  const [row, col] = DEMO;
-  const slot = <MiniSlot cuts={cuts} image={image} row={row} col={col} size={DEMO_SIZE} selected />;
-  const spot = <ShapePiece cuts={cuts} row={row} col={col} size={DEMO_SIZE} shape={spotShape} />;
-  const badged = (node: ReactNode, n: number) => (
-    <View>
-      {node}
-      <NumberBadge n={n} style={styles.badge} />
-    </View>
-  );
-  const rows: { key: string; picture: ReactNode[]; text: string }[] = [
-    { key: 'drag', picture: [slot, <Arrow key="a" />, spot], text: '[Drag] it onto its spot' },
-    { key: 'tap', picture: [badged(slot, 1), <Arrow key="a" />, badged(spot, 2)], text: '[Or tap] it, then tap its spot' },
-    {
-      key: 'return',
-      picture: [
-        <PhotoPiece key="p" cuts={cuts} image={image} row={row} col={col} size={DEMO_SIZE} />,
-        <ReturnArrow key="r" width={22} />,
-        <View key="s" style={styles.emptySlot} />,
-      ],
-      text: '[Toss it off the board], no harm done',
-    },
-  ];
-  return (
-    <View testID="controls" style={styles.controls}>
-      {rows.map((r) => (
-        <View key={r.key} style={styles.controlRow}>
-          <Chip well style={styles.controlChip}>
-            {r.picture.map((node, i) => (
-              <View key={i}>{node}</View>
-            ))}
-          </Chip>
-          <Rich text={r.text} style={styles.controlText} />
-        </View>
-      ))}
     </View>
   );
 }
@@ -212,29 +158,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
   },
-  panelSide: { width: SIDE_PANEL_WIDTH, alignSelf: 'stretch' },
+  // Fills the side column's height above the How to play button.
+  panelSide: { width: SIDE_PANEL_WIDTH, flex: 1 },
   panelCompact: { width: '100%', padding: COMPACT_PADDING, gap: 10 },
-  headerRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  headerStack: { gap: 4 },
-  label: { ...type.labelLarge, color: colors.muted },
-  deckCount: { ...type.smallTabular, color: colors.muted },
-  hint: { ...type.small, color: colors.accent },
+  tab: {
+    position: 'absolute',
+    top: -11,
+    left: 14,
+    zIndex: 1,
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  hint: { ...type.small, color: colors.text },
   slotsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   // Grows to fill the panel's height (which matches the board column), with the slots centred in it.
   slotsColumn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   slot: { alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   handSlot: { backgroundColor: colors.board, borderColor: 'transparent', borderWidth: 2 },
-  selected: { borderColor: colors.accent, borderWidth: 2, borderStyle: 'solid' },
+  // White, not lemon: lemon only ever means what a piece is worth.
+  selected: { borderColor: colors.text, borderWidth: 2, borderStyle: 'solid' },
   holdSlot: { borderColor: colors.line, borderWidth: 1, borderStyle: 'dashed' },
-  holdHovered: { borderColor: colors.accent, borderWidth: 2 },
+  holdHovered: { borderColor: colors.text, borderWidth: 2 },
   holdTag: { ...type.small, position: 'absolute', pointerEvents: 'none', top: 4, left: 6, color: colors.muted, fontSize: 10 },
   hidden: { opacity: 0 },
   dimmed: { opacity: 0.4 },
-  controlsLine: { ...type.small, lineHeight: 17, color: colors.muted },
-  controls: { gap: 12, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.line },
-  controlRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  controlChip: { width: 84, minHeight: 40, paddingVertical: 4, paddingHorizontal: 8, gap: 6, justifyContent: 'center' },
-  controlText: { ...type.small, lineHeight: 15, color: colors.muted, flex: 1 },
-  badge: { position: 'absolute', top: -6, right: -7 },
-  emptySlot: { width: 26, height: 26, borderRadius: 6, backgroundColor: colors.board, borderWidth: 1, borderColor: colors.pieceOutline },
+  controlsLine: { ...type.small, color: colors.muted },
 });

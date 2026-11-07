@@ -160,7 +160,8 @@ function RisingText({ float, cell, onDone }: { float: FloatText; cell: number; o
 const styles = StyleSheet.create({
   // The border sits on an outer frame so the play area inside is exactly COLS × ROWS cells.
   // The play area is the page colour: the board is one surface with the page, marked by its border.
-  frame: { borderColor: colors.line, borderWidth: FRAME_BORDER, borderRadius: 7, alignSelf: 'flex-start' },
+  // pieceOutline, not line: the board's edge has to clear 3:1 against the page (WCAG 1.4.11).
+  frame: { borderColor: colors.pieceOutline, borderWidth: FRAME_BORDER, borderRadius: 7, alignSelf: 'flex-start' },
   board: { backgroundColor: colors.background, borderRadius: 6, overflow: 'hidden' },
   piece: { position: 'absolute' },
   outline: { position: 'absolute', borderRadius: 4, pointerEvents: 'none' },

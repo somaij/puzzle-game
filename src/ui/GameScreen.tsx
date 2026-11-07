@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
+  Easing,
   Platform,
   Pressable,
   ScrollView,
@@ -13,10 +15,10 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { COLS, FLASH_MS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS, UNUSED_MISS_POINTS } from '../engine/constants';
+import { COLS, FLASH_MS, ISLAND_POINTS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS, SNAP_POINTS } from '../engine/constants';
 import { indexOf, rowColOf } from '../engine/cuts';
-import { PIECE_SCALE } from '../engine/geometry';
 import type { Puzzle } from '../engine/daily';
+import { PIECE_SCALE } from '../engine/geometry';
 import {
   canHold,
   decayStartsAt,
@@ -30,22 +32,19 @@ import {
 } from '../engine/game';
 import { getStoredFlag, setStoredFlag } from '../storage';
 import { Board, type FloatText } from './Board';
-import { colors } from './colors';
+import { colors, overlays } from './colors';
 import { FeedPanel, SIDE_PANEL_WIDTH } from './FeedPanel';
 import { HowToPlay } from './HowToPlay';
 import { OnboardingModal } from './OnboardingModal';
 import { PhotoPreview } from './PhotoPreview';
 import { PieceSvg } from './PieceSvg';
-import { ScoreBar, withCommas } from './ScoreBar';
+import { FLY_MS, ScoreCard, withCommas, type MoveRecord } from './ScoreCard';
 import { type } from './type';
 import { TAP_SLOP, usePieceDrag, type DropTarget } from './usePieceDrag';
 
 type Props = {
   puzzle: Puzzle;
   image: ImageSourcePropType;
-  /** Highest puzzle number the ‹ › buttons can switch to. */
-  lastPuzzle: number;
-  onSelectPuzzle: (n: number) => void;
 };
 
 type Rect = { x: number; y: number; width: number; height: number };
@@ -58,10 +57,10 @@ const PANEL_WIDTH = SIDE_PANEL_WIDTH;
 const GAP_WIDE = 24;
 const GAP_NARROW = 16;
 const SIDE_PADDING = 16;
-/** Header (32) + gap + score bar (79) + gap, above the board in the wide layout. */
-const ABOVE_BOARD = 32 + 16 + 79 + 16;
-/** The side panel's fixed parts: border, padding, header and its gap, controls and their gap, gaps between 3 slots. */
-const SIDE_PANEL_CHROME = 2 + 32 + 34 + 16 + 160 + 16 + 2 * 12;
+/** The score card (about 129 with one-line meters and captions) and its gap, above the board in the wide layout. */
+const ABOVE_BOARD = 129 + 16;
+/** The side column's fixed parts: panel border and padding, gaps between 3 slots, and the How to play button with its gap. */
+const SIDE_PANEL_CHROME = 2 + 32 + 2 * 12 + 34 + 16;
 /** Largest hand slot on the side panel. */
 const SIDE_SLOT_MAX = 208;
 const WRONG_FLASH_MS = 300;
@@ -78,15 +77,69 @@ const noTouchZoomOnWeb =
 
 /** One monotonic clock for everything the engine times. */
 const now = () => performance.now();
+const nativeDriver = Platform.OS !== 'web';
 
-export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props) {
+/** The system's "reduce motion" setting (prefers-reduced-motion on the web), kept up to date. */
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((r) => alive && setReduced(r));
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+  return reduced;
+}
+
+/** Points flying from a placed piece to the score card, in window coordinates. */
+type Flight = { id: number; text: string; from: { x: number; y: number }; to: { x: number; y: number }; big: boolean };
+
+/** One flight: an arc from the piece to the card, growing then shrinking into the chip. */
+function FlyingPoints({ flight, onDone }: { flight: Flight; onDone: (id: number) => void }) {
+  const [t] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    Animated.timing(t, { toValue: 1, duration: FLY_MS, easing: Easing.inOut(Easing.cubic), useNativeDriver: nativeDriver }).start(() =>
+      onDone(flight.id),
+    );
+  }, [t, flight.id, onDone]);
+  const { from, to } = flight;
+  const lift = Math.min(120, Math.abs(to.y - from.y) * 0.35 + 40);
+  const midY = Math.min(from.y, to.y) - lift;
+  return (
+    <Animated.Text
+      style={[
+        styles.flight,
+        flight.big ? type.floatLarge : type.floatSmall,
+        {
+          opacity: t.interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0] }),
+          transform: [
+            { translateX: t.interpolate({ inputRange: [0, 1], outputRange: [from.x - 40, to.x - 40] }) },
+            { translateY: t.interpolate({ inputRange: [0, 0.5, 1], outputRange: [from.y - 12, midY, to.y - 12] }) },
+            { scale: t.interpolate({ inputRange: [0, 0.4, 1], outputRange: [1, 1.35, 0.7] }) },
+          ],
+        },
+      ]}
+    >
+      {flight.text}
+    </Animated.Text>
+  );
+}
+
+export function GameScreen({ puzzle, image }: Props) {
+  const reducedMotion = useReducedMotion();
   const [game, setGame] = useState(() => newGame(puzzle, now()));
+  // Every placement and miss as the score card draws it (what each piece was worth, at what speed).
+  const [moves, setMoves] = useState<MoveRecord[]>([]);
   const [wrongCell, setWrongCell] = useState<number | null>(null);
   const wrongTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(wrongTimer.current), []);
 
-  // Shown once per browser (see storage.ts), or any time from the header's "?" button.
+  // Shown once per browser (see storage.ts). The full rules are a sheet behind "How to play".
   const [onboardingVisible, setOnboardingVisible] = useState(() => getStoredFlag(ONBOARDING_KEY) !== '1');
+  const [rulesVisible, setRulesVisible] = useState(false);
   // Each board waits on a Start button ('ready'), then shows the finished photo briefly
   // ('previewing'), then play and its clocks start ('playing'). The photo only shows once the
   // player asks for it, so opening the page (or switching puzzles) while looking away wastes nothing.
@@ -96,13 +149,13 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   const endPreview = useCallback(() => {
     setPhase('playing');
     setGame(newGame(puzzle, now()));
+    setMoves([]);
   }, [puzzle]);
 
   const dismissOnboarding = () => {
     setStoredFlag(ONBOARDING_KEY, '1');
     setOnboardingVisible(false);
     // The popup's "Start playing" is the first visit's Start button, so that's one tap, not two.
-    // Reopened mid-game from "?", it just closes.
     if (phase === 'ready') startPreview();
   };
 
@@ -121,13 +174,43 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
     const added = lines.map((l, line) => ({ ...l, cell, line, id: nextFloatId.current++ }));
     setFloats((fs) => [...fs, ...added]);
   };
+  // A placement's points fly from the piece into the score card (where the sum then plays out),
+  // and the board shakes a little, more for bigger points. With reduced motion, the old rising
+  // "+N" over the cell stands in.
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const nextFlightId = useRef(0);
+  const removeFlight = useCallback((id: number) => setFlights((fs) => fs.filter((f) => f.id !== id)), []);
+  const landingRef = useRef<View>(null);
+  const [boardShake] = useState(() => new Animated.Value(0));
+  const shakeBoard = (points: number) => {
+    const amp = Math.min(4, 0.8 + points / 60);
+    boardShake.setValue(0);
+    Animated.sequence(
+      [amp, -amp, amp * 0.6, -amp * 0.4, 0].map((v) =>
+        Animated.timing(boardShake, { toValue: v, duration: 45, easing: Easing.linear, useNativeDriver: nativeDriver }),
+      ),
+    ).start();
+  };
   const showPlacement = (p: Placement) => {
-    const lines = [{ text: `+${p.points}`, color: colors.accent, large: p.island }];
-    if (p.pulse) lines.push({ text: 'PULSE', color: colors.accent, large: false });
-    showFloats(p.cell, lines);
+    const lines: { text: string; color: string; large: boolean }[] = [];
+    if (reducedMotion) lines.push({ text: `+${p.points}`, color: colors.text, large: p.island });
+    if (p.pulse) lines.push({ text: 'PULSE', color: colors.text, large: false });
+    if (lines.length) showFloats(p.cell, lines);
+    if (reducedMotion) return;
+    shakeBoard(p.points);
+    const board = rects.current.board;
+    if (!board) return;
+    const [row, col] = rowColOf(p.cell);
+    const from = { x: board.x + ((col + 0.5) * board.width) / COLS, y: board.y + ((row + 0.5) * board.height) / ROWS };
+    const base = p.island ? ISLAND_POINTS : SNAP_POINTS;
+    landingRef.current?.measureInWindow((x, y, w, h) => {
+      // Aim at the start of the last-move sum, where the worth chip appears.
+      const to = { x: x + Math.min(30, w / 2), y: y + h / 2 };
+      setFlights((fs) => [...fs, { id: nextFlightId.current++, text: `+${base}`, from, to, big: p.island }]);
+    });
   };
 
-  // A miss has to read as costing the multiplier: red text at the cell, and the score bar flashes.
+  // A miss has to read as costing the multiplier: red text at the cell, and the score card flashes.
   const [missFlash, setMissFlash] = useState<{ id: number; multLostTenths: number } | null>(null);
   const nextMissId = useRef(0);
   const showMiss = (m: Miss) => {
@@ -137,17 +220,17 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
     setMissFlash({ id: nextMissId.current++, multLostTenths: m.multLostTenths });
   };
 
-  // Layout: board beside the feed on wide screens, feed under the board on narrow ones.
-  // The board is as large as fits (3:2), leaving room for the header, score bar and, when narrow, the feed.
+  // Layout: board beside the hand on wide screens, hand under the board on narrow ones.
+  // The board is as large as fits (3:2), leaving room for the score card and, when narrow, the hand.
   const screen = useWindowDimensions();
   const wide = screen.width >= WIDE_LAYOUT_MIN;
   const gap = wide ? GAP_WIDE : GAP_NARROW;
   const boardWidth = wide
     ? Math.min(screen.width - 2 * SIDE_PADDING - PANEL_WIDTH - gap, (screen.height - ABOVE_BOARD - 64) * (COLS / ROWS), 900)
-    : Math.min(screen.width - 2 * SIDE_PADDING, (screen.height - 400) * (COLS / ROWS));
+    : Math.min(screen.width - 2 * SIDE_PADDING, (screen.height - 434) * (COLS / ROWS));
   const cell = boardWidth / COLS;
   // Side panel: a hand piece drawn about the size it will be on the board, as long as three fit
-  // beside the board column with the controls under them.
+  // beside the board column with How to play under them.
   const columnHeight = ABOVE_BOARD + (boardWidth / COLS) * ROWS + 2;
   const sideSlot = Math.floor(Math.min(SIDE_SLOT_MAX, cell * PIECE_SCALE, (columnHeight - SIDE_PANEL_CHROME) / 3));
   const dragPieceSize = Math.max(48, cell * DRAG_SCALE);
@@ -176,13 +259,21 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   };
 
   const playing = game.status === 'playing';
-  const canPlay = playing && !onboardingVisible && started;
+  const canPlay = playing && !onboardingVisible && !rulesVisible && started;
 
   const place = (piece: number, cell: number | null) => {
     const { state, result, placement, miss } = dropPiece(game, piece, cell, now());
     setGame(state);
-    if (placement) showPlacement(placement);
-    if (miss) showMiss(miss);
+    if (placement) {
+      showPlacement(placement);
+      // The fast bonus is applied before scoring, so the state's multiplier is the one it was paid at.
+      const base = placement.island ? ISLAND_POINTS : SNAP_POINTS;
+      setMoves((ms) => [...ms, { kind: placement.island ? 'lone' : 'joined', base, points: placement.points, multTenths: state.multTenths }]);
+    }
+    if (miss) {
+      showMiss(miss);
+      setMoves((ms) => [...ms, { kind: 'miss', multLostTenths: miss.multLostTenths }]);
+    }
     if (result === 'wrong') {
       setWrongCell(cell);
       clearTimeout(wrongTimer.current);
@@ -241,74 +332,79 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
           },
         };
 
-  const restart = () => {
+  /** From the end card: play the puzzle again. (There is no mid-game Restart.) */
+  const replay = () => {
     setSelected(null);
     setFloats([]);
     setMissFlash(null);
-    // Pressing Restart is itself the go-ahead, so skip the Start button.
+    setMoves([]);
+    // Pressing it is itself the go-ahead, so skip the Start button.
     setPhase('previewing');
     setGame(newGame(puzzle, now()));
   };
 
+  // Where the end card's total came from: what the pieces were worth, what speed added, the bonus.
+  let piecePoints = 0;
+  let speedPoints = 0;
+  for (const m of moves) {
+    if (m.kind === 'miss') continue;
+    piecePoints += m.base;
+    speedPoints += m.points - m.base;
+  }
+
+  const howToPlay = (
+    <Pressable
+      testID="help-button"
+      accessibilityRole="button"
+      style={[styles.button, styles.howButton]}
+      onPress={() => setRulesVisible(true)}
+    >
+      <Text style={styles.howButtonText}>How to play</Text>
+    </Pressable>
+  );
+
+  const feed = (
+    <FeedPanel
+      cuts={puzzle.cuts}
+      image={image}
+      hand={game.hand}
+      hold={game.hold}
+      canHold={canHold(game)}
+      dragHandlers={drag.handlersFor}
+      dragged={drag.dragged}
+      selected={selectedPiece}
+      onHoldPress={holdSelected}
+      holdHovered={(drag.hoverHold && drag.dragged !== game.hold) || (selectedPiece !== null && selectedPiece !== game.hold)}
+      showPieces={started}
+      showControls={started && moves.length === 0}
+      holdRef={holdRef}
+      compactWidth={wide ? undefined : boardWidth}
+      sideSlot={wide ? sideSlot : undefined}
+    />
+  );
+
   return (
     <View style={[styles.root, noTouchZoomOnWeb]}>
-      {/* Scrolls so the rules can sit below the game. Drags on a piece don't scroll (see usePieceDrag). */}
+      {/* Scrolls on short screens. Drags on a piece don't scroll (see usePieceDrag). */}
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.screen, wide ? styles.screenWide : styles.screenNarrow]}>
         <View style={[{ gap }, wide ? styles.layoutWide : styles.layoutNarrow]}>
-          <View style={[styles.boardColumn, { width: boardWidth, gap: wide ? 16 : 12 }]}>
-            <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <Pressable
-                  testID="prev-puzzle"
-                  accessibilityRole="button"
-                  accessibilityLabel="Previous puzzle"
-                  disabled={puzzle.number <= 1}
-                  style={[styles.helpButton, puzzle.number <= 1 && styles.disabled]}
-                  onPress={() => onSelectPuzzle(puzzle.number - 1)}
-                >
-                  <Text style={styles.helpButtonText}>‹</Text>
-                </Pressable>
-                <Text style={styles.title}>Puzzle #{puzzle.number}</Text>
-                <Pressable
-                  testID="next-puzzle"
-                  accessibilityRole="button"
-                  accessibilityLabel="Next puzzle"
-                  disabled={puzzle.number >= lastPuzzle}
-                  style={[styles.helpButton, puzzle.number >= lastPuzzle && styles.disabled]}
-                  onPress={() => onSelectPuzzle(puzzle.number + 1)}
-                >
-                  <Text style={styles.helpButtonText}>›</Text>
-                </Pressable>
-              </View>
-              <View style={styles.headerRight}>
-                <Text testID="placed-count" style={styles.count}>
-                  {game.placedCount}/{PIECE_COUNT}
-                </Text>
-                <Pressable
-                  testID="help-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="How to play"
-                  style={styles.helpButton}
-                  onPress={() => setOnboardingVisible(true)}
-                >
-                  <Text style={styles.helpButtonText}>?</Text>
-                </Pressable>
-                <Pressable style={styles.button} onPress={restart}>
-                  <Text style={styles.buttonText}>Restart</Text>
-                </Pressable>
-              </View>
-            </View>
-            <ScoreBar
+          <View style={{ width: boardWidth, gap: wide ? 16 : 12 }}>
+            <ScoreCard
+              puzzleNumber={puzzle.number}
               score={game.score}
               multTenths={game.multTenths}
               missesLeft={missesLeft(game)}
+              moves={moves}
+              cuts={puzzle.cuts}
               missFlash={missFlash}
               decayCountdown={
                 playing && game.multTenths > MULT_MIN_TENTHS ? { from: game.lastPlacedAt, until: decayStartsAt(game) } : null
               }
               compact={!wide}
+              landingRef={landingRef}
+              reducedMotion={reducedMotion}
             />
-            <View>
+            <Animated.View style={{ transform: [{ translateX: boardShake }] }}>
               <Board
                 ref={boardRef}
                 cuts={puzzle.cuts}
@@ -347,7 +443,7 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
               {/* A small card, so the finished picture stays visible. */}
               {!playing && (
                 <View style={styles.overlay}>
-                  <View testID="end-card" style={styles.endCard}>
+                  <View testID="end-card" style={[styles.endCard, styles.endCardWide]}>
                     <Text style={styles.endTitle}>{game.status === 'won' ? 'Solved' : 'Out of misses'}</Text>
                     <Text style={styles.endScore}>{withCommas(game.score)}</Text>
                     <Text style={styles.endText}>
@@ -355,41 +451,28 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
                         ? `All ${PIECE_COUNT} pieces placed.`
                         : `${game.placedCount} of ${PIECE_COUNT} pieces placed.`}
                     </Text>
-                    {game.missBonus > 0 && (
-                      <Text testID="miss-bonus" style={styles.endText}>
-                        Includes <Text style={styles.bonusValue}>+{withCommas(game.missBonus)}</Text> for{' '}
-                        {game.missBonus / UNUSED_MISS_POINTS} unused {game.missBonus === UNUSED_MISS_POINTS ? 'miss' : 'misses'}.
-                      </Text>
-                    )}
-                    <Pressable style={[styles.button, styles.primaryButton]} onPress={restart}>
+                    <Breakdown pieces={piecePoints} speed={speedPoints} bonus={game.missBonus} />
+                    <Pressable style={[styles.button, styles.primaryButton]} onPress={replay}>
                       <Text style={styles.primaryButtonText}>{game.status === 'won' ? 'Play again' : 'Try again'}</Text>
                     </Pressable>
                   </View>
                 </View>
               )}
-            </View>
+            </Animated.View>
           </View>
 
-          <FeedPanel
-            cuts={puzzle.cuts}
-            image={image}
-            hand={game.hand}
-            hold={game.hold}
-            deckCount={game.deck.length}
-            canHold={canHold(game)}
-            dragHandlers={drag.handlersFor}
-            dragged={drag.dragged}
-            selected={selectedPiece}
-            onHoldPress={holdSelected}
-            holdHovered={(drag.hoverHold && drag.dragged !== game.hold) || (selectedPiece !== null && selectedPiece !== game.hold)}
-            showPieces={started}
-            holdRef={holdRef}
-            compactWidth={wide ? undefined : boardWidth}
-            sideSlot={wide ? sideSlot : undefined}
-          />
+          {wide ? (
+            <View style={[styles.sideColumn, { width: PANEL_WIDTH }]}>
+              {feed}
+              {howToPlay}
+            </View>
+          ) : (
+            <>
+              {feed}
+              {howToPlay}
+            </>
+          )}
         </View>
-
-        <HowToPlay width={wide ? boardWidth + gap + PANEL_WIDTH : boardWidth} wide={wide} cuts={puzzle.cuts} />
       </ScrollView>
 
       {/* The dragged copy, in window coordinates, so it sits in an unpadded root at the window origin. */}
@@ -405,7 +488,23 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
         </Animated.View>
       )}
 
-      {/* Covers the viewport (not the full scroll height), and its own backdrop blocks clicks and wheel-scroll underneath. */}
+      {/* Points on their way to the score card, over everything, in window coordinates. */}
+      {flights.map((f) => (
+        <FlyingPoints key={f.id} flight={f} onDone={removeFlight} />
+      ))}
+
+      {/* The rules, one tap away. Covers the viewport; its backdrop blocks the game underneath. */}
+      {rulesVisible && (
+        <View testID="rules-sheet" style={styles.sheetBackdrop}>
+          <ScrollView contentContainerStyle={styles.sheetScroll}>
+            <HowToPlay width={Math.min(screen.width - 32, wide ? 1000 : 520)} wide={screen.width >= 900} cuts={puzzle.cuts} />
+            <Pressable accessibilityRole="button" style={[styles.button, styles.primaryButton, styles.sheetClose]} onPress={() => setRulesVisible(false)}>
+              <Text style={styles.primaryButtonText}>Back to the puzzle</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      )}
+
       <OnboardingModal
         visible={onboardingVisible}
         onDismiss={dismissOnboarding}
@@ -417,21 +516,47 @@ export function GameScreen({ puzzle, image, lastPuzzle, onSelectPuzzle }: Props)
   );
 }
 
+/** The end card's split of the total: pieces (lemon), speed (magenta), unused misses (white). */
+function Breakdown({ pieces, speed, bonus }: { pieces: number; speed: number; bonus: number }) {
+  const parts = [
+    { label: 'Pieces', value: pieces, color: colors.accent },
+    { label: 'Speed', value: speed, color: colors.multiplier },
+    { label: 'Unused misses', value: bonus, color: colors.text },
+  ].filter((p) => p.value > 0);
+  const total = parts.reduce((a, p) => a + p.value, 0);
+  if (total === 0) return null;
+  return (
+    <View testID="score-breakdown" style={styles.breakdown}>
+      <View style={styles.stack}>
+        {parts.map((p) => (
+          <View key={p.label} style={{ flex: p.value / total, backgroundColor: p.color }} />
+        ))}
+      </View>
+      <View style={styles.legend}>
+        {parts.map((p) => (
+          <View key={p.label} style={styles.legendItem}>
+            <View style={[styles.dot, { backgroundColor: p.color }]} />
+            <Text style={styles.legendText}>
+              {p.label} {withCommas(p.value)}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, userSelect: 'none' },
   scroll: { flex: 1, backgroundColor: colors.background },
   // Grows to at least the screen height, so the game stays centred when everything fits.
   screen: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SIDE_PADDING },
-  screenWide: { paddingTop: 32, paddingBottom: 48, gap: 40 },
-  screenNarrow: { paddingTop: 20, paddingBottom: 32, gap: 32 },
+  screenWide: { paddingTop: 32, paddingBottom: 48 },
+  // Phones: top-aligned, so a tall screen doesn't leave dead space above the score.
+  screenNarrow: { paddingTop: 20, paddingBottom: 32, justifyContent: 'flex-start' },
   layoutWide: { flexDirection: 'row', alignItems: 'stretch' },
   layoutNarrow: { flexDirection: 'column', alignItems: 'stretch' },
-  boardColumn: {},
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  title: { ...type.titleScreen, color: colors.text },
-  count: { ...type.valueCount, color: colors.muted },
+  sideColumn: { gap: 16 },
   button: {
     backgroundColor: colors.surface,
     borderColor: colors.line,
@@ -440,20 +565,11 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     paddingHorizontal: 14,
   },
-  buttonText: { ...type.button, color: colors.muted },
-  helpButton: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.line,
-    borderWidth: 1,
-  },
-  helpButtonText: { ...type.glyph, color: colors.muted },
-  disabled: { opacity: 0.35 },
-  primaryButton: { backgroundColor: colors.accent, borderColor: colors.accent, marginTop: 6 },
+  // Easy to find (full width, at the end of the column) but light, so it doesn't compete with the hand.
+  howButton: { alignItems: 'center', paddingVertical: 7, backgroundColor: 'transparent', borderColor: colors.pieceOutline },
+  howButtonText: { ...type.button, color: colors.text },
+  // White, not lemon: lemon only ever means what a piece is worth.
+  primaryButton: { backgroundColor: colors.text, borderColor: colors.text, marginTop: 6 },
   primaryButtonText: { ...type.buttonPrimary, color: colors.onAccent },
   overlay: {
     position: 'absolute',
@@ -474,12 +590,22 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderWidth: 1,
   },
+  endCardWide: { minWidth: 300 },
   endTitle: { ...type.titleCard, color: colors.text },
-  endScore: { ...type.valueEndScore, color: colors.accent },
+  endScore: { ...type.valueEndScore, color: colors.text },
   endText: { ...type.body, color: colors.muted },
-  bonusValue: { color: colors.accent },
   startText: { textAlign: 'center', maxWidth: 240, marginTop: 2 },
   startButton: { marginTop: 10, paddingVertical: 11, paddingHorizontal: 28 },
   startButtonText: { ...type.buttonLarge },
+  breakdown: { alignSelf: 'stretch', gap: 8, marginVertical: 8 },
+  stack: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', gap: 2 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 14, rowGap: 4 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { ...type.small, color: colors.muted },
+  sheetBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: overlays.backdrop },
+  sheetScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 16 },
+  sheetClose: { paddingVertical: 10, paddingHorizontal: 24 },
   dragLayer: { position: 'absolute', left: 0, top: 0, pointerEvents: 'none' },
+  flight: { position: 'absolute', left: 0, top: 0, width: 80, textAlign: 'center', color: colors.accent, pointerEvents: 'none' },
 });

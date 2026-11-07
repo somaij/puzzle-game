@@ -5,7 +5,7 @@ import { FLASH_MS, ISLAND_POINTS, MISS_LIMIT, SNAP_POINTS } from '../engine/cons
 import type { Cut } from '../engine/cuts';
 import { PIECE_SCALE } from '../engine/geometry';
 import { colors, overlays } from './colors';
-import { Cluster, loneShape, Meter, MiniSlot, PhotoPiece, Pips, plainShape, spotShape } from './Pictures';
+import { Cluster, loneShape, PhotoPiece, plainShape, spotShape } from './Pictures';
 import { Rich } from './Rich';
 import { type } from './type';
 
@@ -23,10 +23,21 @@ type Props = {
 const liftedOnWeb =
   Platform.OS === 'web' ? ({ filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.55))' } as unknown as ViewStyle) : null;
 
+/** A few meter segments, as in the score card. */
+function Segs({ lit, total, color, w = 7 }: { lit: number; total: number; color: string; w?: number }) {
+  return (
+    <View style={styles.segs}>
+      {Array.from({ length: total }, (_, i) => (
+        <View key={i} style={[styles.seg, { width: w, backgroundColor: i < lit ? color : colors.meterTrack }]} />
+      ))}
+    </View>
+  );
+}
+
 /**
- * A quick first-visit primer, dismissed once and remembered (see storage.ts): three picture steps
- * and three one-line rules, each picture made of the game's own parts. The full rules stay below
- * the board.
+ * A quick first-visit primer, dismissed once and remembered (see storage.ts). It carries the first
+ * game on its own, so it teaches what the player will actually see: the photo, placing a piece,
+ * and the score card adding up. Then three one-line rules. The full rules are behind How to play.
  */
 export function OnboardingModal({ visible, onDismiss, cuts, image, narrow }: Props) {
   if (!visible) return null;
@@ -39,31 +50,25 @@ export function OnboardingModal({ visible, onDismiss, cuts, image, narrow }: Pro
         <View style={styles.center}>
           <Image source={image} style={[styles.thumb, { width: 78 * s, height: 52 * s }]} resizeMode="cover" />
           <View style={[styles.timer, { marginTop: -10 * s }]}>
-            <Text style={[type.valueCount, styles.accent]}>{FLASH_MS / 1000}s</Text>
+            <Text style={[type.valueCount, styles.text]}>{FLASH_MS / 1000}s</Text>
           </View>
         </View>
       ),
     },
     {
-      head: 'Pick a piece',
-      sub: 'from your hand of 3',
-      picture: (
-        <View style={styles.hand}>
-          <MiniSlot cuts={cuts} image={image} row={1} col={0} size={34 * s} />
-          <MiniSlot cuts={cuts} image={image} row={2} col={4} size={34 * s} selected />
-          <MiniSlot cuts={cuts} image={image} row={0} col={2} size={34 * s} />
-        </View>
-      ),
+      head: 'Place a piece',
+      sub: 'drag it, or tap it then its spot',
+      picture: <DropPicture cuts={cuts} image={image} size={30 * s} />,
     },
     {
-      head: 'Drop it in',
-      sub: 'drag it or tap to place',
-      picture: <DropPicture cuts={cuts} image={image} size={30 * s} />,
+      head: 'Watch it add up',
+      sub: 'each piece × your speed',
+      picture: <AddUpPicture cuts={cuts} scale={s} />,
     },
   ];
   const islandTimes = ISLAND_POINTS / SNAP_POINTS;
   const rules: { picture: ReactNode; text: string }[] = [
-    { picture: <Pips left={4} used={2} size={9} />, text: `{${MISS_LIMIT} misses} and the puzzle ends` },
+    { picture: <Segs lit={MISS_LIMIT - 2} total={MISS_LIMIT} color={colors.text} w={6} />, text: `[${MISS_LIMIT} misses] and the puzzle ends` },
     {
       picture: (
         <>
@@ -77,12 +82,9 @@ export function OnboardingModal({ visible, onDismiss, cuts, image, narrow }: Pro
     },
     {
       picture: (
-        <>
-          <Text style={[type.valueMultiplier, styles.accent]}>×1.6</Text>
-          <Meter level={0.6} width={44} />
-        </>
+        <Segs lit={6} total={10} color={colors.multiplier} w={8} />
       ),
-      text: '{Place fast} to grow your multiplier',
+      text: '<Place fast> to light up your speed',
     },
   ];
 
@@ -119,7 +121,7 @@ export function OnboardingModal({ visible, onDismiss, cuts, image, narrow }: Pro
         <Pressable testID="onboarding-start" accessibilityRole="button" style={styles.button} onPress={onDismiss}>
           <Text style={[type.buttonPrimary, styles.buttonText]}>Start playing</Text>
         </Pressable>
-        <Text style={[type.small, styles.muted, styles.centred]}>Full rules are always below the board.</Text>
+        <Text style={[type.small, styles.muted, styles.centred]}>The full rules are under How to play.</Text>
       </View>
     </View>
   );
@@ -137,7 +139,36 @@ function DropPicture({ cuts, image, size }: { cuts: Cut[]; image: ImageSourcePro
         shapeFor={(row, col) => (row === 2 && col === 4 ? spotShape : plainShape)}
       />
       <View style={[styles.dragged, liftedOnWeb, { left: cell + cell * 0.45, top: cell + cell * 0.3 }]}>
-        <PhotoPiece cuts={cuts} image={image} row={2} col={4} size={size} stroke={colors.accent} />
+        <PhotoPiece cuts={cuts} image={image} row={2} col={4} size={size} stroke={colors.text} />
+      </View>
+    </View>
+  );
+}
+
+/** Step 3: the score card's bottom row in miniature, "125 = bars, last 25 ×1.1 +28". */
+function AddUpPicture({ cuts, scale }: { cuts: Cut[]; scale: number }) {
+  return (
+    <View style={[styles.addUp, { transform: [{ scale }] }]}>
+      <View style={styles.addUpRow}>
+        <Text style={[type.valueScore, styles.text]}>128</Text>
+        <Text style={[type.valueCount, styles.muted]}>=</Text>
+        <View style={styles.miniBars}>
+          <View style={[styles.miniBar, { height: 20, backgroundColor: colors.accent }]} />
+          <View style={styles.miniNewest}>
+            <View style={[styles.miniBar, { height: 2, backgroundColor: colors.multiplier }]} />
+            <View style={[styles.miniBar, { height: 6, backgroundColor: colors.accent }]} />
+          </View>
+        </View>
+      </View>
+      <View style={styles.addUpRow}>
+        <View style={[styles.chip, { backgroundColor: colors.accent }]}>
+          <Cluster cuts={cuts} cells={[[1, 1], [1, 2]]} size={11} shapeFor={() => ({ stroke: colors.onAccent, strokeWidth: 8 })} />
+          <Text style={styles.chipText}>25</Text>
+        </View>
+        <View style={[styles.chip, { backgroundColor: colors.multiplier }]}>
+          <Text style={styles.chipText}>×1.1</Text>
+        </View>
+        <Text style={[styles.chipSum]}>+28</Text>
       </View>
     </View>
   );
@@ -212,11 +243,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderRadius: 999,
-    backgroundColor: colors.accent,
+    // White, not lemon: lemon only ever means what a piece is worth.
+    backgroundColor: colors.text,
   },
   buttonText: { color: colors.onAccent },
+  segs: { flexDirection: 'row', gap: 2 },
+  seg: { height: 7, borderRadius: 2 },
+  addUp: { gap: 6, alignItems: 'center' },
+  addUpRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  miniBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 24 },
+  miniBar: { width: 6, borderRadius: 1 },
+  miniNewest: { padding: 1, borderWidth: 1, borderColor: colors.text, borderRadius: 2 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 1, paddingHorizontal: 5, borderRadius: 6 },
+  chipText: { ...type.valueCount, fontSize: 11, color: colors.onAccent },
+  chipSum: { ...type.valueCount, fontSize: 11, color: colors.text },
   centred: { textAlign: 'center' },
   text: { color: colors.text },
   muted: { color: colors.muted },
   accent: { color: colors.accent },
+  magenta: { color: colors.multiplier },
 });

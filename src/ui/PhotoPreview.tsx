@@ -63,5 +63,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeLabel: { ...type.small, color: colors.muted },
-  count: { ...type.valueCountdown, color: colors.accent, minWidth: 14, textAlign: 'center' },
+  count: { ...type.valueCountdown, color: colors.text, minWidth: 14, textAlign: 'center' },
 });

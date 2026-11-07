@@ -30,9 +30,11 @@ A 10 s photo preview at the start, a hand of 3 (hold slot switched off), drag- o
 (mouse and touch),
 island/snap scoring, score multiplier with fast bonus, stall decay and a
 countdown to the next drop, pulse ghosts, and a 12-miss limit (win on all 24
-placed, fail on the 12th miss). A quick onboarding popup shows once per browser
-(a header "?" button reopens it any time).
-"Restart" replays freely until the one-play-per-day loop lands (checkpoint 4).
+placed, fail on the 12th miss). A quick onboarding popup shows once per browser;
+the full rules are a sheet behind the "How to play" button (bottom of the hand
+column). There is no header and no mid-game Restart (the quieter design, see
+docs/ux-research-complexity.md); the end card's "Play again" / "Try again"
+replays freely until the one-play-per-day loop lands (checkpoint 4).
 
 Test build is live at https://somaij.github.io/puzzle-game/ (GitHub Pages,
 public repo `somaij/puzzle-game`). Redeploy with `npm run deploy`.
@@ -141,19 +143,34 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
 - *Tempo axis (the flow multiplier, shown to players as "×1.3" beside the score):*
   - Range **1.0×–2.0×** (was 1.5×; raised so fast play keeps paying past
     the fifth placement). Starts at 1.0.
-  - **Score and multiplier share one box** (simpler than two): "Score" and the
-    value on the left, the multiplier ("×1.3") top right, and its meter
-    running beside the score value. Misses left is its own slim box below
-    (on wide screens, beside it).
-  - That box shows the level (the meter) and **the time until the
-    multiplier drops**, both as seconds beside the meter ("3.2s", tenths,
-    rounded up; "0.0s" in red while it is dropping) and as a line along the
-    box's bottom edge. Both run from the last placement to the first decay
-    step (`decayStartsAt`), reset on each placement, and are hidden at 1.0×
-    (nothing left to lose). Holds and
-    misses don't refill it. The 3 s fast window is deliberately *not* shown:
-    a countdown running at 1.0× read to playtesters as the multiplier running
-    out.
+  - **One score card holds everything about the score** (`ScoreCard`).
+    Colour rule: **lemon is what a piece is worth, magenta is what speed
+    adds.** Top row: the puzzle number, then "misses left" over 12 white
+    segments and "speed ×1.6" over 10 magenta segments (one per ×0.1).
+    Bottom row: the total, "=", then the move strip, one bar per move (lemon
+    base, magenta cap for the speed bonus, red × for a miss), the newest
+    outlined and followed by its sum ("[25] [×1.6] +40"). Every part of that
+    row has a small caption under it, so it reads like a receipt: score ·
+    your moves · lone/joined · speed · added. On desktop each meter is one
+    line (label, segments, number); on phones the label and number sit above. The move list
+    is kept by the screen as moves happen (`MoveRecord`).
+  - Each placement plays out Balatro-style (~1 s, never blocking the next
+    drop; a new move cuts the last one short): the board shakes (more for
+    bigger points), "+25" flies from the piece into the card, the worth chip
+    steps forward with a wobble, the × chip slams in beside it, the result
+    rolls from 25 up to 40, and the total counts up and bumps. A newly lit
+    speed segment flashes; at ×2.0 the speed meter glows. Timings are the
+    constants at the top of `ScoreCard.tsx`. With the system's reduce-motion
+    setting, all of it is off and the numbers just update. The history row has a fixed height and shows only the bars
+    that fit (oldest fade off the left), so the board never moves mid-game.
+  - **Lemon only ever means what a piece is worth.** Selection borders,
+    primary buttons, hints and the rising "+40" are white.
+  - **The time until the multiplier drops** is the newest speed segment
+    draining, from the last placement to the first decay step
+    (`decayStartsAt`); it resets on each placement and doesn't run at 1.0×
+    (nothing left to lose). Holds and misses don't refill it. The 3 s fast
+    window is deliberately *not* shown: a countdown running at 1.0× read to
+    playtesters as the multiplier running out.
   - A "fast" placement (within **3000 ms** of the **previous placement**, or of
     the start of play for the first) adds **+0.1**. It means keeping up the
     pace; with a hand there is no single moment a piece is "presented".
@@ -181,18 +198,18 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
 - Why: the multiplier can't go below 1.0×, so on its own a misplace cost
   nothing at the floor and islands could be brute-forced cell by cell. A shared
   daily score needs wrong guesses to cost something.
-- The misses box is labelled **"Misses left"** and shows the count as a number
-  ("11 /12", red at 3 or fewer) beside 12 pips that go dim as they're used.
-  (Playtesters didn't read the earlier pips-only version, white dots turning
-  into red rings.)
+- Misses left is a meter in the score card: **"misses left 11"** over 12
+  segments that go dark as they're used (count and segments red at 3 or
+  fewer). Visible from the start, so the risk is felt before the first guess.
+  (Playtesters didn't read an earlier pips-only version, so keep the number.)
 - Every placement and miss is recorded in order (`moves`: island / snap / miss)
   for the shareable result.
 - **A miss must read as costing the multiplier** (playtesters missed it when
   the number just changed quietly). On a miss: "MISS" rises in red from the
   cell, plus "−0.1×" when the multiplier actually dropped (`dropPiece` returns
-  `miss.multLostTenths`, 0 at 1.0×). The misses box border flashes red; if the
-  multiplier dropped, the score box also flashes red, shakes, turns the value red and
-  shows "−0.1" beside it. Red holds 0.3 s, then fades over 0.7 s.
+  `miss.multLostTenths`, 0 at 1.0×). The score card's border flashes red, and
+  shakes if the multiplier dropped; the move strip gets a red × and the last
+  summary reads "Miss −0.1×". Red holds 0.3 s, then fades over 0.7 s.
 
 **Pulse (the assist reward)**
 - Fires on **any correct island placement** (not gated on speed; islands are
@@ -257,10 +274,10 @@ tenths); treat them as a starting point, not gospel.
   would show a different photo. Appending only changes days that would
   otherwise have wrapped around to image 1, so keep the list ahead of today.
 - **Adding your own photos:** see the `add-photos` skill for the workflow.
-- **Switching puzzles (testing aid):** ‹ › beside the title step through
-  puzzles 1 to `max(today, image count)`, so every past day and every bundled
-  photo is reachable; the choice is kept in the URL as `?puzzle=N` (which
-  also works as a link, in dev and in the live build). Checkpoint 4's
+- **Switching puzzles (testing aid):** `?puzzle=N` in the URL opens any
+  puzzle from 1 to `max(today, image count)`, so every past day and every
+  bundled photo is reachable (in dev and in the live build). The on-screen
+  ‹ › switcher was removed in the quieter design. Checkpoint 4's
   one-play-per-day loop has to decide whether players keep this (e.g. as an
   archive of past days) or it goes back to dev-only.
 

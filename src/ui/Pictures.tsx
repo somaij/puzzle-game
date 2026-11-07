@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 
 import { indexOf, type Cut } from '../engine/cuts';
-import { PIECE_OFFSET, PIECE_SCALE } from '../engine/geometry';
+import { PIECE_SCALE } from '../engine/geometry';
 import { colors } from './colors';
 import { PieceSvg, type PieceShape } from './PieceSvg';
 import { type } from './type';
@@ -84,77 +83,15 @@ export const loneShape: PieceShape = { fill: colors.surfaceRaised, stroke: color
 /** An empty spot: a dashed outline, as on the board. */
 export const spotShape: PieceShape = { stroke: colors.text, strokeOpacity: 0.6, strokeWidth: 5, dashed: true };
 
-/** A hand slot holding a piece, as in the hand. */
-export function MiniSlot({
-  cuts,
-  image,
-  row,
-  col,
-  size,
-  selected = false,
-}: CutsProp & { image: ImageSourcePropType; row: number; col: number; size: number; selected?: boolean }) {
-  return (
-    <View style={[styles.slot, { width: size, height: size }, selected && styles.slotSelected]}>
-      <PhotoPiece cuts={cuts} image={image} row={row} col={col} size={size - 4} />
-    </View>
-  );
-}
-
-/** The misses-left pips: `left` bright, `used` dim. */
-export function Pips({ left, used, size = 10 }: { left: number; used: number; size?: number }) {
-  return (
-    <View style={styles.row4}>
-      {Array.from({ length: left + used }, (_, i) => (
-        <View
-          key={i}
-          style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: i < left ? colors.text : colors.line }}
-        />
-      ))}
-    </View>
-  );
-}
-
-/** A short multiplier meter, `level` 0–1 full. */
-export function Meter({ level, width = 60 }: { level: number; width?: number }) {
-  return (
-    <View style={[styles.meter, { width }]}>
-      <View style={[styles.meterFill, { width: level * width }]} />
-    </View>
-  );
-}
-
-/** A small numbered circle, for the order of taps. */
-export function NumberBadge({ n, style }: { n: number; style?: StyleProp<ViewStyle> }) {
-  return (
-    <View style={[styles.badge, style]}>
-      <Text style={styles.badgeText}>{n}</Text>
-    </View>
-  );
-}
-
 export function Arrow() {
   return <Text style={styles.arrow}>→</Text>;
 }
 
-/** A curved arrow, from a piece back into the hand. */
-export function ReturnArrow({ width = 26 }: { width?: number }) {
-  const h = width * 0.45;
-  return (
-    <Svg width={width} height={h} viewBox="0 0 26 12">
-      <Path d="M1 11 C 7 1, 19 1, 25 11" fill="none" stroke={colors.muted} strokeWidth={1.6} strokeLinecap="round" />
-      <Path d="M20.5 8.5 L 25 11 L 25.5 6" fill="none" stroke={colors.muted} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-/** Where a piece's padded box sits relative to its cell, for overlapping pictures. */
-export const pieceInset = (size: number) => (size / PIECE_SCALE) * PIECE_OFFSET;
-
-/** A tiny piece outline in the accent colour, for decoration (the rules title). */
+/** A tiny tilted piece outline, for decoration (the rules title). */
 export function DoodlePiece({ cuts, size = 28 }: CutsProp & { size?: number }) {
   return (
     <View style={{ transform: [{ rotate: '14deg' }] }}>
-      <ShapePiece cuts={cuts} row={1} col={1} size={size} shape={{ stroke: colors.accent, strokeWidth: 8 }} />
+      <ShapePiece cuts={cuts} row={1} col={1} size={size} shape={{ stroke: colors.text, strokeWidth: 8 }} />
     </View>
   );
 }
@@ -171,12 +108,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   abs: { position: 'absolute' },
-  slot: { alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: colors.board, borderWidth: 1.5, borderColor: 'transparent' },
-  slotSelected: { borderColor: colors.accent },
-  row4: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  meter: { height: 6, borderRadius: 3, backgroundColor: colors.meterTrack, overflow: 'hidden' },
-  meterFill: { height: 6, borderRadius: 3, backgroundColor: colors.accent },
-  badge: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
-  badgeText: { ...type.small, fontSize: 10, lineHeight: 12, color: colors.onAccent },
   arrow: { ...type.small, color: colors.muted },
 });
