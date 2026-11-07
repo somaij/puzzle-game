@@ -69,7 +69,7 @@ const TICK_MS = 100;
 /** The dragged piece's box relative to a cell, as in the POC: its body is ~82% of a cell, so the outline of the cell under it stays visible. */
 const DRAG_SCALE = 1.12;
 /** Bump this to make the onboarding popup show again for everyone (a content change, say). */
-const ONBOARDING_KEY = 'onboarding-seen-v1';
+const ONBOARDING_KEY = 'onboarding-seen-v2';
 
 // Web only: taps on the game shouldn't zoom the page (double-tap) or open the long-press menu.
 const noTouchZoomOnWeb =
