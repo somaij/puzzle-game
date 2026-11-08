@@ -29,6 +29,8 @@ function initialPuzzleNumber(): number {
 
 export default function App() {
   const [number] = useState(initialPuzzleNumber);
+  // Only today's puzzle is the one-play daily; any other `?puzzle=N` is free practice.
+  const [isDaily] = useState(() => number === puzzleNumber(new Date()));
   const puzzle = useMemo(() => createPuzzle(number), [number]);
   // The fonts are bundled and small, so wait for them rather than flash the system font.
   // If one fails, carry on with the fallback rather than show a blank page.
@@ -39,7 +41,7 @@ export default function App() {
 
   return (
     <>
-      <GameScreen puzzle={puzzle} image={image} />
+      <GameScreen puzzle={puzzle} image={image} isDaily={isDaily} />
       <StatusBar style="light" />
     </>
   );

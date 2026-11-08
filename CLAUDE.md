@@ -33,8 +33,15 @@ countdown to the next drop, pulse ghosts, and a 12-miss limit (win on all 24
 placed, fail on the 12th miss). A quick onboarding popup shows once per browser;
 the full rules are a sheet behind the "How to play" button (bottom of the hand
 column). There is no header and no mid-game Restart (the quieter design, see
-docs/ux-research-complexity.md); the end card's "Play again" / "Try again"
-replays freely until the one-play-per-day loop lands (checkpoint 4).
+docs/ux-research-complexity.md).
+
+Today's puzzle is **one play**: it saves after every change (`SavedGame` in
+`GameScreen`), so a reload resumes it and a finished one reopens on its result
+(`ResultSheet`: score breakdown, stats, share, countdown to local midnight). The
+preview also can't be restarted by reloading. Stats live in localStorage
+(`src/engine/result.ts`); the streak counts days played, not days solved, because
+a day's difficulty depends on its photo. Any other `?puzzle=N` is free practice:
+replayable, unsaved and uncounted.
 
 Test build is live at https://somaij.github.io/puzzle-game/ (GitHub Pages,
 public repo `somaij/puzzle-game`). Redeploy with `npm run deploy`.
@@ -213,8 +220,12 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   segments that go dark as they're used (count and segments red at 3 or
   fewer). Visible from the start, so the risk is felt before the first guess.
   (Playtesters didn't read an earlier pips-only version, so keep the number.)
-- Every placement and miss is recorded in order (`moves`: island / snap / miss)
-  for the shareable result.
+- Every placement and miss is recorded in order. The shared result
+  (`shareText` in `src/engine/result.ts`) is **plain words** anyone can read
+  without having played, one fact per line with its own emoji: "✅ Solved /
+  ❌ 3 misses / ⭐ 2,349 points / ⚡ Top speed ×2.0".
+  Coloured-square grids and charts were tried and rejected: they needed a legend,
+  and Wordle's only reads because everyone already knows it.
 - **A miss must read as costing the multiplier** (playtesters missed it when
   the number just changed quietly). On a miss: "MISS" rises in red from the
   cell, plus "−0.1×" when the multiplier actually dropped (`dropPiece` returns
@@ -355,7 +366,7 @@ Run typecheck, lint and tests before calling a task done.
   2. ✅ One-at-a-time feed + hold + drag-to-place with correct/wrong/return,
      including the end-of-deck fix.
   3. ✅ Scoring + flow multiplier + pulse + 12-miss limit.
-  4. Daily loop: one play per day, result screen, share text, stats/streak.
+  4. ✅ Daily loop: one play per day, result screen, share text, stats/streak.
   5. Publish the static web build. (Test build already on GitHub Pages; the
      public launch, and its domain, is still to decide.)
   6. Later: Android build, own-photo mode, Zen mode, monetization.

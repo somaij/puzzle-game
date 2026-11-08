@@ -18,6 +18,8 @@ export type MoveRecord =
 
 type Props = {
   puzzleNumber: number;
+  /** A replayable `?puzzle=N` game, which doesn't count towards stats. */
+  practice: boolean;
   score: number;
   multTenths: number;
   missesLeft: number;
@@ -71,7 +73,7 @@ export const multText = (tenths: number) => `×${(tenths / 10).toFixed(1)}`;
  * newest outlined and followed by its sum, played out in beats so the formula explains itself.
  */
 export function ScoreCard(props: Props) {
-  const { puzzleNumber, score, multTenths, missesLeft, moves, cuts, missFlash, decayCountdown, compact, landingRef, reducedMotion } = props;
+  const { puzzleNumber, practice, score, multTenths, missesLeft, moves, cuts, missFlash, decayCountdown, compact, landingRef, reducedMotion } = props;
 
   // `flash` is 1 at a miss (held, then fading to 0); `shaking` runs 0 → 1 once, right at the miss.
   const [flash] = useState(() => new Animated.Value(0));
@@ -157,7 +159,7 @@ export function ScoreCard(props: Props) {
   return (
     <Animated.View style={[styles.card, compact && styles.cardCompact, redBorder, shake]}>
       <View style={styles.top}>
-        <Text style={styles.puzzle}>Puzzle #{puzzleNumber}</Text>
+        <Text style={styles.puzzle}>Puzzle #{puzzleNumber}{practice ? ' · practice' : ''}</Text>
         {!compact && meters}
       </View>
       {compact && meters}

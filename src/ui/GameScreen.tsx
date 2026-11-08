@@ -15,7 +15,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { COLS, FLASH_MS, ISLAND_POINTS, MULT_MIN_TENTHS, PIECE_COUNT, ROWS, SNAP_POINTS } from '../engine/constants';
+import { COLS, FLASH_MS, ISLAND_POINTS, MULT_MIN_TENTHS, ROWS, SNAP_POINTS } from '../engine/constants';
 import { indexOf, rowColOf } from '../engine/cuts';
 import type { Puzzle } from '../engine/daily';
 import { PIECE_SCALE } from '../engine/geometry';
@@ -28,10 +28,12 @@ import {
   missesLeft,
   newGame,
   tick,
+  type GameState,
   type Miss,
   type Placement,
 } from '../engine/game';
-import { getStoredFlag, setStoredFlag } from '../storage';
+import { NO_STATS, recordResult, type Stats } from '../engine/result';
+import { getStoredFlag, getStoredJson, setStoredFlag, setStoredJson } from '../storage';
 import { Board, type FloatText } from './Board';
 import { colors, overlays } from './colors';
 import { FeedPanel, SIDE_PANEL_WIDTH } from './FeedPanel';
@@ -39,14 +41,37 @@ import { HowToPlay } from './HowToPlay';
 import { OnboardingModal } from './OnboardingModal';
 import { PhotoPreview } from './PhotoPreview';
 import { PieceSvg } from './PieceSvg';
-import { FLY_MS, ScoreCard, withCommas, type MoveRecord } from './ScoreCard';
+import { ResultSheet } from './ResultSheet';
+import { FLY_MS, ScoreCard, type MoveRecord } from './ScoreCard';
 import { type } from './type';
 import { TAP_SLOP, usePieceDrag, type DropTarget } from './usePieceDrag';
 
 type Props = {
   puzzle: Puzzle;
   image: ImageSourcePropType;
+  /** Today's puzzle: one play, saved as it goes, and counted in the stats. Otherwise free practice. */
+  isDaily: boolean;
 };
+
+/** Today's game as stored after every change, so a reload resumes it rather than restarting it. */
+type SavedGame = {
+  puzzle: number;
+  /** Set when the photo preview starts, so reloading can't show it again from the top. */
+  previewStartedAt?: number;
+  game?: GameState;
+  moves?: MoveRecord[];
+  tried?: Record<number, number[]>;
+};
+
+const SAVE_KEY = 'daily-game-v1';
+const STATS_KEY = 'daily-stats-v1';
+/** Let the scoring animation finish before the result covers it. */
+const RESULT_DELAY_MS = 1500;
+
+function loadSave(puzzleNumber: number): SavedGame | null {
+  const saved = getStoredJson<SavedGame>(SAVE_KEY);
+  return saved?.puzzle === puzzleNumber ? saved : null;
+}
 
 type Rect = { x: number; y: number; width: number; height: number };
 
@@ -130,13 +155,23 @@ function FlyingPoints({ flight, onDone }: { flight: Flight; onDone: (id: number)
   );
 }
 
-export function GameScreen({ puzzle, image }: Props) {
+export function GameScreen({ puzzle, image, isDaily }: Props) {
   const reducedMotion = useReducedMotion();
-  const [game, setGame] = useState(() => newGame(puzzle, now()));
+  // Today's game, if it was already started on this device.
+  const [saved] = useState(() => (isDaily ? loadSave(puzzle.number) : null));
+  const [game, setGame] = useState<GameState>(() =>
+    // The clocks are per-page-load, so a resumed game restarts them; pulse ghosts don't survive.
+    saved?.game ? { ...saved.game, lastPlacedAt: now(), decaySteps: 0, ghosts: [] } : newGame(puzzle, now()),
+  );
   // Every placement and miss as the score card draws it (what each piece was worth, at what speed).
-  const [moves, setMoves] = useState<MoveRecord[]>([]);
+  const [moves, setMoves] = useState<MoveRecord[]>(() => saved?.moves ?? []);
   // Spots already tried with each piece, so nobody pays twice for the same wrong guess.
-  const [tried, setTried] = useState<Record<number, number[]>>({});
+  const [tried, setTried] = useState<Record<number, number[]>>(() => saved?.tried ?? {});
+  const [stats, setStats] = useState<Stats>(() => getStoredJson<Stats>(STATS_KEY) ?? NO_STATS);
+  // Coming back to a finished daily puzzle opens straight on its result.
+  const [resultOpen, setResultOpen] = useState(() => isDaily && (saved?.game?.status === 'won' || saved?.game?.status === 'failed'));
+  const resultTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(resultTimer.current), []);
   const [wrongCell, setWrongCell] = useState<number | null>(null);
   const wrongTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(wrongTimer.current), []);
@@ -147,9 +182,20 @@ export function GameScreen({ puzzle, image }: Props) {
   // Each board waits on a Start button ('ready'), then shows the finished photo briefly
   // ('previewing'), then play and its clocks start ('playing'). The photo only shows once the
   // player asks for it, so opening the page (or switching puzzles) while looking away wastes nothing.
-  const [phase, setPhase] = useState<'ready' | 'previewing' | 'playing'>('ready');
+  // On a reload today's preview carries on with the time it had left, and never restarts.
+  const [previewMs, setPreviewMs] = useState(() =>
+    saved?.previewStartedAt ? Math.max(0, FLASH_MS - (Date.now() - saved.previewStartedAt)) : FLASH_MS,
+  );
+  const [phase, setPhase] = useState<'ready' | 'previewing' | 'playing'>(() => {
+    if (saved?.game) return 'playing';
+    if (saved?.previewStartedAt) return previewMs > 0 ? 'previewing' : 'playing';
+    return 'ready';
+  });
   const started = phase === 'playing';
-  const startPreview = () => setPhase('previewing');
+  const startPreview = () => {
+    if (isDaily) setStoredJson(SAVE_KEY, { puzzle: puzzle.number, previewStartedAt: Date.now() } satisfies SavedGame);
+    setPhase('previewing');
+  };
   const endPreview = useCallback(() => {
     setPhase('playing');
     setGame(newGame(puzzle, now()));
@@ -163,6 +209,11 @@ export function GameScreen({ puzzle, image }: Props) {
     // The popup's "Start playing" is the first visit's Start button, so that's one tap, not two.
     if (phase === 'ready') startPreview();
   };
+
+  // Save today's game as it changes, so closing the page can't give a second go at it.
+  useEffect(() => {
+    if (isDaily && phase === 'playing') setStoredJson(SAVE_KEY, { puzzle: puzzle.number, game, moves, tried } satisfies SavedGame);
+  }, [isDaily, phase, puzzle.number, game, moves, tried]);
 
   // Flow decay and pulse fade depend on time passing, not just on moves.
   useEffect(() => {
@@ -267,11 +318,22 @@ export function GameScreen({ puzzle, image }: Props) {
   // Out of misses, carrying on just to complete the picture: pieces still move, nothing counts.
   const finishing = game.status === 'finishing';
   const ended = game.status === 'won' || game.status === 'failed';
-  const canPlay = (playing || finishing) && !onboardingVisible && !rulesVisible && started;
+  const canPlay = (playing || finishing) && !onboardingVisible && !rulesVisible && !resultOpen && started;
 
   const place = (piece: number, cell: number | null) => {
     const { state, result, placement, miss } = dropPiece(game, piece, cell, now());
     setGame(state);
+    const nowEnded = state.status === 'won' || state.status === 'failed';
+    if (nowEnded && game.status !== state.status) {
+      // The score is final at the win or the last miss; finishing the picture afterwards changes nothing.
+      if (isDaily && game.status === 'playing') {
+        const next = recordResult(stats, { puzzle: puzzle.number, won: state.status === 'won', score: state.score });
+        setStats(next);
+        setStoredJson(STATS_KEY, next);
+      }
+      clearTimeout(resultTimer.current);
+      resultTimer.current = setTimeout(() => setResultOpen(true), reducedMotion ? 0 : RESULT_DELAY_MS);
+    }
     if (placement) {
       showPlacement(placement);
       // The fast bonus is applied before scoring, so the state's multiplier is the one it was paid at.
@@ -341,8 +403,10 @@ export function GameScreen({ puzzle, image }: Props) {
           },
         };
 
-  /** From the end card: play the puzzle again. (There is no mid-game Restart.) */
+  /** Practice games only: play the puzzle again. Today's puzzle is one play. */
   const replay = () => {
+    setResultOpen(false);
+    setPreviewMs(FLASH_MS);
     setSelected(null);
     setFloats([]);
     setMissFlash(null);
@@ -356,15 +420,6 @@ export function GameScreen({ puzzle, image }: Props) {
   // The piece being moved, by drag or by tap: its already-tried spots get marked on the board.
   const heldPiece = drag.dragged ?? selectedPiece;
 
-  // Where the end card's total came from: what the pieces were worth, what speed added, the bonus.
-  let piecePoints = 0;
-  let speedPoints = 0;
-  for (const m of moves) {
-    if (m.kind === 'miss') continue;
-    piecePoints += m.base;
-    speedPoints += m.points - m.base;
-  }
-
   const howToPlay = (
     <Pressable
       testID="help-button"
@@ -372,8 +427,25 @@ export function GameScreen({ puzzle, image }: Props) {
       style={[styles.button, styles.howButton]}
       onPress={() => setRulesVisible(true)}
     >
-      <Text style={styles.howButtonText}>How to play</Text>
+      <Text numberOfLines={1} style={styles.howButtonText}>
+        How to play
+      </Text>
     </Pressable>
+  );
+  // Once the game is over the result stays one tap away, beside How to play.
+  const bottomButtons = ended ? (
+    <View style={styles.bottomRow}>
+      <View style={styles.grow}>
+        <Pressable testID="open-result" accessibilityRole="button" style={[styles.button, styles.howButton]} onPress={() => setResultOpen(true)}>
+          <Text numberOfLines={1} style={styles.howButtonText}>
+            Your result
+          </Text>
+        </Pressable>
+      </View>
+      <View style={styles.grow}>{howToPlay}</View>
+    </View>
+  ) : (
+    howToPlay
   );
 
   const feed = (
@@ -405,6 +477,7 @@ export function GameScreen({ puzzle, image }: Props) {
           <View style={{ width: boardWidth, gap: wide ? 16 : 12 }}>
             <ScoreCard
               puzzleNumber={puzzle.number}
+              practice={!isDaily}
               score={game.score}
               multTenths={game.multTenths}
               missesLeft={missesLeft(game)}
@@ -434,7 +507,7 @@ export function GameScreen({ puzzle, image }: Props) {
                 touchHandlers={boardHandlers}
               >
                 {phase === 'previewing' && !onboardingVisible && (
-                  <PhotoPreview image={image} ms={FLASH_MS} onDone={endPreview} />
+                  <PhotoPreview image={image} ms={previewMs} onDone={endPreview} />
                 )}
               </Board>
               {phase === 'ready' && !onboardingVisible && (
@@ -455,55 +528,18 @@ export function GameScreen({ puzzle, image }: Props) {
                   </View>
                 </View>
               )}
-              {/* A small card, so the finished picture stays visible. */}
-              {ended && (
-                <View style={styles.overlay}>
-                  <View testID="end-card" style={[styles.endCard, styles.endCardWide]}>
-                    <Text style={styles.endTitle}>{game.status === 'won' ? 'Solved' : 'Out of misses'}</Text>
-                    <Text style={styles.endScore}>{withCommas(game.score)}</Text>
-                    <Text style={styles.endText}>
-                      {game.status === 'won'
-                        ? `All ${PIECE_COUNT} pieces placed.`
-                        : game.placedCount === PIECE_COUNT
-                          ? 'Picture finished. Your score locked at the last miss.'
-                          : `${game.placedCount} of ${PIECE_COUNT} pieces placed. Your score is locked.`}
-                    </Text>
-                    <Breakdown pieces={piecePoints} speed={speedPoints} bonus={game.missBonus} />
-                    <View style={styles.endButtons}>
-                      {game.status === 'failed' && game.placedCount < PIECE_COUNT && (
-                        <Pressable
-                          testID="finish-picture"
-                          accessibilityRole="button"
-                          style={[styles.button, styles.primaryButton]}
-                          onPress={() => setGame(finishPicture)}
-                        >
-                          <Text style={styles.primaryButtonText}>Finish the picture</Text>
-                        </Pressable>
-                      )}
-                      <Pressable
-                        style={[styles.button, game.status === 'failed' && game.placedCount < PIECE_COUNT ? styles.secondaryEndButton : styles.primaryButton]}
-                        onPress={replay}
-                      >
-                        <Text style={game.status === 'failed' && game.placedCount < PIECE_COUNT ? styles.buttonText : styles.primaryButtonText}>
-                          {game.status === 'won' ? 'Play again' : 'Try again'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </View>
-              )}
             </Animated.View>
           </View>
 
           {wide ? (
             <View style={[styles.sideColumn, { width: PANEL_WIDTH }]}>
               {feed}
-              {howToPlay}
+              {bottomButtons}
             </View>
           ) : (
             <>
               {feed}
-              {howToPlay}
+              {bottomButtons}
             </>
           )}
         </View>
@@ -539,6 +575,21 @@ export function GameScreen({ puzzle, image }: Props) {
         </View>
       )}
 
+      {resultOpen && (
+        <ResultSheet
+          puzzleNumber={puzzle.number}
+          game={game}
+          moves={moves}
+          stats={isDaily ? stats : null}
+          onClose={() => setResultOpen(false)}
+          onFinishPicture={() => {
+            setResultOpen(false);
+            setGame(finishPicture);
+          }}
+          onReplay={replay}
+        />
+      )}
+
       <OnboardingModal
         visible={onboardingVisible}
         onDismiss={dismissOnboarding}
@@ -546,36 +597,6 @@ export function GameScreen({ puzzle, image }: Props) {
         image={image}
         narrow={screen.width < NARROW_CARD_MAX}
       />
-    </View>
-  );
-}
-
-/** The end card's split of the total: pieces (lemon), speed (magenta), unused misses (white). */
-function Breakdown({ pieces, speed, bonus }: { pieces: number; speed: number; bonus: number }) {
-  const parts = [
-    { label: 'Pieces', value: pieces, color: colors.accent },
-    { label: 'Speed', value: speed, color: colors.multiplier },
-    { label: 'Unused misses', value: bonus, color: colors.text },
-  ].filter((p) => p.value > 0);
-  const total = parts.reduce((a, p) => a + p.value, 0);
-  if (total === 0) return null;
-  return (
-    <View testID="score-breakdown" style={styles.breakdown}>
-      <View style={styles.stack}>
-        {parts.map((p) => (
-          <View key={p.label} style={{ flex: p.value / total, backgroundColor: p.color }} />
-        ))}
-      </View>
-      <View style={styles.legend}>
-        {parts.map((p) => (
-          <View key={p.label} style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: p.color }]} />
-            <Text style={styles.legendText}>
-              {p.label} {withCommas(p.value)}
-            </Text>
-          </View>
-        ))}
-      </View>
     </View>
   );
 }
@@ -591,6 +612,8 @@ const styles = StyleSheet.create({
   layoutWide: { flexDirection: 'row', alignItems: 'stretch' },
   layoutNarrow: { flexDirection: 'column', alignItems: 'stretch' },
   sideColumn: { gap: 16 },
+  bottomRow: { flexDirection: 'row', gap: 8 },
+  grow: { flex: 1 },
   button: {
     backgroundColor: colors.surface,
     borderColor: colors.line,
@@ -600,10 +623,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   // Easy to find (full width, at the end of the column) but light, so it doesn't compete with the hand.
-  buttonText: { ...type.button, color: colors.muted },
-  secondaryEndButton: { marginTop: 6, borderColor: colors.pieceOutline, backgroundColor: 'transparent' },
-  endButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  howButton: { alignItems: 'center', paddingVertical: 7, backgroundColor: 'transparent', borderColor: colors.pieceOutline },
+  howButton: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, backgroundColor: 'transparent', borderColor: colors.pieceOutline },
   howButtonText: { ...type.button, color: colors.text },
   // White, not lemon: lemon only ever means what a piece is worth.
   primaryButton: { backgroundColor: colors.text, borderColor: colors.text, marginTop: 6 },
@@ -627,19 +647,11 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     borderWidth: 1,
   },
-  endCardWide: { minWidth: 300 },
   endTitle: { ...type.titleCard, color: colors.text },
-  endScore: { ...type.valueEndScore, color: colors.text },
   endText: { ...type.body, color: colors.muted },
   startText: { textAlign: 'center', maxWidth: 240, marginTop: 2 },
   startButton: { marginTop: 10, paddingVertical: 11, paddingHorizontal: 28 },
   startButtonText: { ...type.buttonLarge },
-  breakdown: { alignSelf: 'stretch', gap: 8, marginVertical: 8 },
-  stack: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', gap: 2 },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 14, rowGap: 4 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { ...type.small, color: colors.muted },
   sheetBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: overlays.backdrop },
   sheetScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 16 },
   sheetClose: { paddingVertical: 10, paddingHorizontal: 24 },

@@ -22,6 +22,20 @@ export function getStoredFlag(key: string): string | null {
   }
 }
 
+export function getStoredJson<T>(key: string): T | null {
+  const raw = getStoredFlag(key);
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredJson(key: string, value: unknown): void {
+  setStoredFlag(key, JSON.stringify(value));
+}
+
 export function setStoredFlag(key: string, value: string): void {
   try {
     store()?.setItem(key, value);
