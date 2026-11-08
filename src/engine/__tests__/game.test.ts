@@ -15,6 +15,7 @@ import {
   canHold,
   decayStartsAt,
   dropPiece,
+  finishPicture,
   holdPiece,
   isIsland,
   isPlayable,
@@ -339,6 +340,52 @@ describe('misses', () => {
     expect(missesLeft(game)).toBe(0);
     expect(dropPiece(game, 0, 0, 100).result).toBe('returned');
     expect(holdPiece(game, 0, 100)).toBe(game);
+  });
+});
+
+describe('finishing the picture after running out of misses', () => {
+  function outOfMisses(): GameState {
+    let game = place(newGame(rowMajor, 0), 0, 0);
+    for (let i = 1; i <= MISS_LIMIT; i++) game = dropPiece(game, 1, 10, i).state;
+    expect(game.status).toBe('failed');
+    return game;
+  }
+
+  it('only starts from a failed game', () => {
+    const fresh = newGame(rowMajor, 0);
+    expect(finishPicture(fresh)).toBe(fresh);
+    expect(finishPicture(outOfMisses()).status).toBe('finishing');
+  });
+
+  it('places pieces without scoring, and wrong drops cost nothing', () => {
+    const locked = outOfMisses();
+    let game = finishPicture(locked);
+    const wrong = dropPiece(game, 1, 10, 100);
+    expect(wrong.result).toBe('wrong');
+    expect(wrong.miss).toBeUndefined();
+    expect(wrong.state).toBe(game);
+
+    const right = dropPiece(game, 1, 1, 200);
+    expect(right.result).toBe('placed');
+    expect(right.placement).toBeUndefined();
+    game = right.state;
+    expect(game.placed[1]).toBe(true);
+    expect(game.placedCount).toBe(locked.placedCount + 1);
+    expect(game.score).toBe(locked.score);
+    expect(game.misses).toBe(locked.misses);
+    expect(game.multTenths).toBe(locked.multTenths);
+    expect(game.moves).toEqual(locked.moves);
+  });
+
+  it('ends failed, with no bonus, once the picture is complete', () => {
+    const locked = outOfMisses();
+    let game = finishPicture(locked);
+    while (game.status === 'finishing') game = placeLowest(game, 300);
+    expect(game.status).toBe('failed');
+    expect(game.placedCount).toBe(PIECE_COUNT);
+    expect(game.score).toBe(locked.score);
+    expect(game.missBonus).toBe(0);
+    expect(finishPicture(game)).toBe(game);
   });
 });
 

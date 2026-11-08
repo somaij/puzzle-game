@@ -192,9 +192,20 @@ document is the tiebreaker for *rules*. Where they disagree, this document wins
   the main lever.
 
 **Misses (Wordle-style limit)**
-- Each puzzle allows **12 wrong drops** (`MISS_LIMIT`). The 12th ends the game
+- Each puzzle allows **12 wrong drops** (`MISS_LIMIT`). The 12th locks the score
   ("Out of misses", status `failed`), keeping the score and pieces placed so
   far. Off-board / filled-cell drops don't count.
+- **The player can still finish the picture** (`finishPicture`, status
+  `finishing`): the end card offers it, pieces keep placing, wrong drops just
+  bounce, and score, misses and moves stay locked. Stopping dead with the photo
+  half done was the harshest moment in testing.
+- **Spots already tried with a piece show an ×** while that piece is held
+  (kept by the screen). This repeats only what the player has already paid to
+  learn, so it isn't a correctness hint. Simulation (2,000 games, a perfect
+  shape-reader who remembers every try): with no help from the photo, 10.2
+  misses on average and 35% of games hit 12; if the photo rules out half the
+  spots, 4.1 and 0%. So 12 suits photos with clear regions; repetitive photos
+  are the problem, not the limit.
 - Why: the multiplier can't go below 1.0×, so on its own a misplace cost
   nothing at the floor and islands could be brute-forced cell by cell. A shared
   daily score needs wrong guesses to cost something.

@@ -23,6 +23,7 @@ import {
   canHold,
   decayStartsAt,
   dropPiece,
+  finishPicture,
   holdPiece,
   missesLeft,
   newGame,
@@ -69,7 +70,7 @@ const TICK_MS = 100;
 /** The dragged piece's box relative to a cell, as in the POC: its body is ~82% of a cell, so the outline of the cell under it stays visible. */
 const DRAG_SCALE = 1.12;
 /** Bump this to make the onboarding popup show again for everyone (a content change, say). */
-const ONBOARDING_KEY = 'onboarding-seen-v2';
+const ONBOARDING_KEY = 'onboarding-seen-v3';
 
 // Web only: taps on the game shouldn't zoom the page (double-tap) or open the long-press menu.
 const noTouchZoomOnWeb =
@@ -78,6 +79,7 @@ const noTouchZoomOnWeb =
 /** One monotonic clock for everything the engine times. */
 const now = () => performance.now();
 const nativeDriver = Platform.OS !== 'web';
+const NO_CELLS: readonly number[] = [];
 
 /** The system's "reduce motion" setting (prefers-reduced-motion on the web), kept up to date. */
 function useReducedMotion() {
@@ -133,6 +135,8 @@ export function GameScreen({ puzzle, image }: Props) {
   const [game, setGame] = useState(() => newGame(puzzle, now()));
   // Every placement and miss as the score card draws it (what each piece was worth, at what speed).
   const [moves, setMoves] = useState<MoveRecord[]>([]);
+  // Spots already tried with each piece, so nobody pays twice for the same wrong guess.
+  const [tried, setTried] = useState<Record<number, number[]>>({});
   const [wrongCell, setWrongCell] = useState<number | null>(null);
   const wrongTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(wrongTimer.current), []);
@@ -150,6 +154,7 @@ export function GameScreen({ puzzle, image }: Props) {
     setPhase('playing');
     setGame(newGame(puzzle, now()));
     setMoves([]);
+    setTried({});
   }, [puzzle]);
 
   const dismissOnboarding = () => {
@@ -259,7 +264,10 @@ export function GameScreen({ puzzle, image }: Props) {
   };
 
   const playing = game.status === 'playing';
-  const canPlay = playing && !onboardingVisible && !rulesVisible && started;
+  // Out of misses, carrying on just to complete the picture: pieces still move, nothing counts.
+  const finishing = game.status === 'finishing';
+  const ended = game.status === 'won' || game.status === 'failed';
+  const canPlay = (playing || finishing) && !onboardingVisible && !rulesVisible && started;
 
   const place = (piece: number, cell: number | null) => {
     const { state, result, placement, miss } = dropPiece(game, piece, cell, now());
@@ -275,6 +283,7 @@ export function GameScreen({ puzzle, image }: Props) {
       setMoves((ms) => [...ms, { kind: 'miss', multLostTenths: miss.multLostTenths }]);
     }
     if (result === 'wrong') {
+      if (cell !== null) setTried((t) => ({ ...t, [piece]: [...(t[piece] ?? []), cell] }));
       setWrongCell(cell);
       clearTimeout(wrongTimer.current);
       wrongTimer.current = setTimeout(() => setWrongCell(null), WRONG_FLASH_MS);
@@ -338,10 +347,14 @@ export function GameScreen({ puzzle, image }: Props) {
     setFloats([]);
     setMissFlash(null);
     setMoves([]);
+    setTried({});
     // Pressing it is itself the go-ahead, so skip the Start button.
     setPhase('previewing');
     setGame(newGame(puzzle, now()));
   };
+
+  // The piece being moved, by drag or by tap: its already-tried spots get marked on the board.
+  const heldPiece = drag.dragged ?? selectedPiece;
 
   // Where the end card's total came from: what the pieces were worth, what speed added, the bonus.
   let piecePoints = 0;
@@ -376,7 +389,8 @@ export function GameScreen({ puzzle, image }: Props) {
       onHoldPress={holdSelected}
       holdHovered={(drag.hoverHold && drag.dragged !== game.hold) || (selectedPiece !== null && selectedPiece !== game.hold)}
       showPieces={started}
-      showControls={started && moves.length === 0}
+      showControls={started && playing && moves.length === 0}
+      note={finishing ? 'Score locked. Finish the picture' : undefined}
       holdRef={holdRef}
       compactWidth={wide ? undefined : boardWidth}
       sideSlot={wide ? sideSlot : undefined}
@@ -416,6 +430,7 @@ export function GameScreen({ puzzle, image }: Props) {
                 width={boardWidth}
                 hoverCell={drag.hoverCell}
                 wrongCell={wrongCell}
+                triedCells={heldPiece === null ? NO_CELLS : (tried[heldPiece] ?? NO_CELLS)}
                 touchHandlers={boardHandlers}
               >
                 {phase === 'previewing' && !onboardingVisible && (
@@ -441,7 +456,7 @@ export function GameScreen({ puzzle, image }: Props) {
                 </View>
               )}
               {/* A small card, so the finished picture stays visible. */}
-              {!playing && (
+              {ended && (
                 <View style={styles.overlay}>
                   <View testID="end-card" style={[styles.endCard, styles.endCardWide]}>
                     <Text style={styles.endTitle}>{game.status === 'won' ? 'Solved' : 'Out of misses'}</Text>
@@ -449,12 +464,31 @@ export function GameScreen({ puzzle, image }: Props) {
                     <Text style={styles.endText}>
                       {game.status === 'won'
                         ? `All ${PIECE_COUNT} pieces placed.`
-                        : `${game.placedCount} of ${PIECE_COUNT} pieces placed.`}
+                        : game.placedCount === PIECE_COUNT
+                          ? 'Picture finished. Your score locked at the last miss.'
+                          : `${game.placedCount} of ${PIECE_COUNT} pieces placed. Your score is locked.`}
                     </Text>
                     <Breakdown pieces={piecePoints} speed={speedPoints} bonus={game.missBonus} />
-                    <Pressable style={[styles.button, styles.primaryButton]} onPress={replay}>
-                      <Text style={styles.primaryButtonText}>{game.status === 'won' ? 'Play again' : 'Try again'}</Text>
-                    </Pressable>
+                    <View style={styles.endButtons}>
+                      {game.status === 'failed' && game.placedCount < PIECE_COUNT && (
+                        <Pressable
+                          testID="finish-picture"
+                          accessibilityRole="button"
+                          style={[styles.button, styles.primaryButton]}
+                          onPress={() => setGame(finishPicture)}
+                        >
+                          <Text style={styles.primaryButtonText}>Finish the picture</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        style={[styles.button, game.status === 'failed' && game.placedCount < PIECE_COUNT ? styles.secondaryEndButton : styles.primaryButton]}
+                        onPress={replay}
+                      >
+                        <Text style={game.status === 'failed' && game.placedCount < PIECE_COUNT ? styles.buttonText : styles.primaryButtonText}>
+                          {game.status === 'won' ? 'Play again' : 'Try again'}
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
               )}
@@ -566,6 +600,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   // Easy to find (full width, at the end of the column) but light, so it doesn't compete with the hand.
+  buttonText: { ...type.button, color: colors.muted },
+  secondaryEndButton: { marginTop: 6, borderColor: colors.pieceOutline, backgroundColor: 'transparent' },
+  endButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
   howButton: { alignItems: 'center', paddingVertical: 7, backgroundColor: 'transparent', borderColor: colors.pieceOutline },
   howButtonText: { ...type.button, color: colors.text },
   // White, not lemon: lemon only ever means what a piece is worth.

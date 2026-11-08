@@ -68,7 +68,11 @@ export function OnboardingModal({ visible, onDismiss, cuts, image, narrow }: Pro
   ];
   const islandTimes = ISLAND_POINTS / SNAP_POINTS;
   const rules: { picture: ReactNode; text: string }[] = [
-    { picture: <Segs lit={MISS_LIMIT - 2} total={MISS_LIMIT} color={colors.text} w={6} />, text: `[${MISS_LIMIT} misses] and the puzzle ends` },
+    {
+      picture: <Cluster cuts={cuts} cells={[[0, 0], [0, 1]]} size={26} shapeFor={() => plainShape} />,
+      text: '[Start at the corners]: flat edges go on the border',
+    },
+    { picture: <Segs lit={MISS_LIMIT - 2} total={MISS_LIMIT} color={colors.text} w={6} />, text: `[${MISS_LIMIT} misses] locks your score` },
     {
       picture: (
         <>

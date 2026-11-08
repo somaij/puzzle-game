@@ -79,6 +79,11 @@ const CARDS: Card[] = [
     ),
   },
   {
+    title: 'Where to start',
+    text: '[Flat edges go on the border], and tabs have to fit the pieces already down. Each corner piece has only one home, so start there and build outward.',
+    picture: (cuts) => <Cluster cuts={cuts} cells={[[0, 0], [0, 1]]} size={PIECE} shapeFor={() => plainShape} />,
+  },
+  {
     title: 'Your score card',
     text: 'One bar per move: {lemon} is what the piece was worth, a <magenta> cap is what speed added, a red × is a miss. The newest bar is outlined, with its sum beside it.',
     picture: () => (
@@ -123,7 +128,7 @@ const CARDS: Card[] = [
   },
   {
     title: 'Misses',
-    text: `Only a wrong spot counts; fumbling it off the board is free. Miss [${MISS_LIMIT}] times and that’s the puzzle done.`,
+    text: `Only a wrong spot counts; fumbling it off the board is free. Spots you’ve tried with a piece get an ×. Miss [${MISS_LIMIT}] times and your score locks, but you can still finish the picture.`,
     picture: () => (
       <>
         <Text style={[type.valueMultiplier, styles.text]}>{MISS_LIMIT - 1}</Text>

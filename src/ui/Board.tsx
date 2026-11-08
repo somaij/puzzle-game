@@ -9,6 +9,7 @@ import {
   type ImageSourcePropType,
   type TextStyle,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { COLS, ROWS } from '../engine/constants';
 import { rowColOf, type Cut } from '../engine/cuts';
@@ -35,6 +36,8 @@ type Props = {
   hoverCell: number | null;
   /** Cell a piece was just wrongly dropped on: flashes red. */
   wrongCell: number | null;
+  /** Cells already tried with the piece in hand: each shows a small ×. It only repeats what the player has learned. */
+  triedCells: readonly number[];
   /** Touch handlers for the play area (tap-to-place, while a piece is selected). */
   touchHandlers?: GestureResponderHandlers;
   /** Attached to the exact-size play area, for measuring its position on screen. */
@@ -53,7 +56,7 @@ const textShadow = Platform.select<TextStyle>({
 });
 
 /** The bare assembly area. Only placed pieces (and pulse ghosts) are drawn; the grid itself stays hidden. */
-export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width, hoverCell, wrongCell, touchHandlers, ref, children }: Props) {
+export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width, hoverCell, wrongCell, triedCells, touchHandlers, ref, children }: Props) {
   const playWidth = width - 2 * FRAME_BORDER;
   const cell = playWidth / COLS;
   const pieceAt = (i: number) => {
@@ -69,6 +72,7 @@ export function Board({ cuts, image, placed, ghosts, floats, onFloatDone, width,
         ))}
         {cuts.map((cut, i) => (placed[i] ? <PlacedPiece key={i} {...pieceAt(i)} cut={cut} image={image} /> : null))}
         {hoverCell !== null && !placed[hoverCell] && <CellOutline index={hoverCell} cell={cell} style={styles.hover} />}
+        {triedCells.map((i) => (placed[i] ? null : <TriedMark key={i} index={i} cell={cell} />))}
         {wrongCell !== null && <CellOutline index={wrongCell} cell={cell} style={styles.wrong} />}
         {children}
       </View>
@@ -113,6 +117,17 @@ function GhostPiece({ row, col, left, top, size, cut, image, until }: PlacedProp
     <Animated.View testID="ghost" style={[styles.piece, { left, top, opacity }]}>
       <PieceSvg cut={cut} row={row} col={col} image={image} size={size} ghost />
     </Animated.View>
+  );
+}
+
+function TriedMark({ index, cell }: { index: number; cell: number }) {
+  const [row, col] = rowColOf(index);
+  return (
+    <View testID="tried-mark" style={[styles.outline, styles.tried, { left: col * cell, top: row * cell, width: cell, height: cell }]}>
+      <Svg width={cell * 0.26} height={cell * 0.26} viewBox="0 0 24 24">
+        <Path d="M4 4 L20 20 M20 4 L4 20" stroke={colors.text} strokeOpacity={0.55} strokeWidth={3} strokeLinecap="round" />
+      </Svg>
+    </View>
   );
 }
 
@@ -166,6 +181,7 @@ const styles = StyleSheet.create({
   piece: { position: 'absolute' },
   outline: { position: 'absolute', borderRadius: 4, pointerEvents: 'none' },
   hover: { borderWidth: 2, borderColor: colors.muted },
+  tried: { alignItems: 'center', justifyContent: 'center' },
   wrong: { borderWidth: 3, borderColor: colors.bad },
   float: {
     position: 'absolute',

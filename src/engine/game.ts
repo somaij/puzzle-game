@@ -44,8 +44,11 @@ export type GameState = {
   /** placed[i] is true once piece i is on the board. */
   placed: readonly boolean[];
   placedCount: number;
-  /** `failed` = out of misses. */
-  status: 'playing' | 'won' | 'failed';
+  /**
+   * `failed` = out of misses: the score is locked. `finishing` = out of misses, but the player chose
+   * to complete the picture anyway (see `finishPicture`); nothing scores or costs anything.
+   */
+  status: 'playing' | 'won' | 'failed' | 'finishing';
   /** Includes `missBonus` once won. */
   score: number;
   /** Points for unused misses (UNUSED_MISS_POINTS each), added to the score on the win; 0 until then. */
@@ -95,7 +98,16 @@ export function newGame(puzzle: Puzzle, now: number): GameState {
 
 /** Whether `piece` can be dragged right now: it's in the hand or the hold slot. */
 export function isPlayable(state: GameState, piece: number): boolean {
-  return state.status === 'playing' && (state.hand.includes(piece) || state.hold === piece);
+  return (state.status === 'playing' || state.status === 'finishing') && (state.hand.includes(piece) || state.hold === piece);
+}
+
+/**
+ * After the last miss, carry on placing pieces just to complete the picture. The score, misses and
+ * move list are locked: nothing from here on counts. Only valid on a failed game with pieces left.
+ */
+export function finishPicture(state: GameState): GameState {
+  if (state.status !== 'failed' || state.placedCount === PIECE_COUNT) return state;
+  return { ...state, status: 'finishing', ghosts: [] };
 }
 
 export function missesLeft(state: GameState): number {
@@ -185,6 +197,20 @@ export function dropPiece(
   const s = tick(state, now);
   if (!isPlayable(s, piece)) return { state: s, result: 'returned' };
   if (cell === null || cell < 0 || cell >= PIECE_COUNT || s.placed[cell]) return { state: s, result: 'returned' };
+
+  // Finishing the picture after the score locked: right cells fill in, wrong ones just bounce.
+  if (s.status === 'finishing') {
+    if (cell !== piece) return { state: s, result: 'wrong' };
+    const placed = s.placed.slice();
+    placed[cell] = true;
+    const placedCount = s.placedCount + 1;
+    const fromHold = s.hold === piece;
+    const { hand, deck } = fromHold ? { hand: s.hand, deck: s.deck } : refillSlot(s, piece);
+    return {
+      state: { ...s, hand, deck, hold: fromHold ? null : s.hold, placed, placedCount, status: placedCount === PIECE_COUNT ? 'failed' : 'finishing' },
+      result: 'placed',
+    };
+  }
 
   if (cell !== piece) {
     const misses = s.misses + 1;

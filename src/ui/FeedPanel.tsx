@@ -39,6 +39,8 @@ type Props = {
   showPieces: boolean;
   /** Until the first placement: a one-line reminder of how to move a piece. */
   showControls: boolean;
+  /** A short status shown in the tab when there's no other hint (e.g. the score is locked). */
+  note?: string;
   /** Attached to the hold slot, for measuring it as a drop target. */
   holdRef?: Ref<View>;
   /** On narrow screens the feed is one row under the board, this many px wide. Omit for the side panel. */
@@ -82,6 +84,7 @@ export function FeedPanel(props: Props) {
     holdHovered,
     showPieces,
     showControls,
+    note,
     holdRef,
     compactWidth,
     sideSlot,
@@ -112,6 +115,12 @@ export function FeedPanel(props: Props) {
       ) : showControls ? (
         <View style={styles.tab}>
           <Rich testID="controls" style={styles.controlsLine} text="[Drag] a piece, or [tap] it then its spot" />
+        </View>
+      ) : note ? (
+        <View style={styles.tab}>
+          <Text testID="hand-note" style={styles.controlsLine}>
+            {note}
+          </Text>
         </View>
       ) : null}
       <View style={[compact ? styles.slotsRow : styles.slotsColumn, { gap: compact ? COMPACT_GAP : SIDE_GAP }]}>
