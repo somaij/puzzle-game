@@ -12,8 +12,8 @@ const RESOLUTION = 180;
 const FRAME_MS = 1000 / 30;
 /** How much of each photo colour lights the indigo. Low, so the paint stays behind the game. */
 const COLOUR_STRENGTH = 0.34;
-/** Fast enough to notice (a pool crosses the screen in about 10 s), slow enough to ignore while playing. */
-const SPEED = 1;
+/** A third of the shader's natural pace: a pool crosses the screen in 25-30 s. Faster pulled the eye on a phone. */
+const SPEED = 0.33;
 const BASE_COLOUR = [31 / 255, 36 / 255, 66 / 255];
 
 const VERTEX = `
