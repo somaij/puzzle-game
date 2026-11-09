@@ -31,7 +31,7 @@ export const colors = {
   pieceOutline: '#7c86c0',
 };
 
-/** What's behind the app: on web it's see-through, showing the animated backdrop in public/index.html. */
+/** What's behind the app: on web it's see-through, showing the animated backdrop (src/ui/backdrop.ts). */
 export const pageBackground = Platform.OS === 'web' ? 'transparent' : colors.background;
 
 /** Semi-transparent versions for overlays. */

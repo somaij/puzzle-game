@@ -6,7 +6,7 @@ import { Platform, View } from 'react-native';
 import { createPuzzle, imageIndexFor, puzzleNumber } from './src/engine/daily';
 import { reloadWhenDayChanges, setUpOfflinePlay } from './src/pwa';
 import { PUZZLE_GLOWS, PUZZLE_IMAGES } from './src/puzzleImages';
-import { tintBackdrop } from './src/ui/backdrop';
+import { startBackdrop } from './src/ui/backdrop';
 import { pageBackground } from './src/ui/colors';
 import { GameScreen } from './src/ui/GameScreen';
 import { FONT_FILES } from './src/ui/type';
@@ -38,7 +38,7 @@ export default function App() {
     if (onWeb) setUpOfflinePlay(PUZZLE_IMAGES.length);
   }, []);
   useEffect(() => {
-    if (onWeb) tintBackdrop(PUZZLE_GLOWS[imageIndexFor(number, PUZZLE_GLOWS.length)]);
+    if (onWeb) return startBackdrop(PUZZLE_GLOWS[imageIndexFor(number, PUZZLE_GLOWS.length)]);
   }, [number]);
   useEffect(() => {
     if (onWeb && isDaily) return reloadWhenDayChanges(number);

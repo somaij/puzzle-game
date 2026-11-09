@@ -330,11 +330,14 @@ tenths); treat them as a starting point, not gospel.
   (titles, numbers, rising points), bundled in `assets/fonts/` under the OFL
   (see its README for the Shantell subset). Each weight is its own
   `fontFamily`; never set `fontWeight` on them. On web the page behind the app
-  is slowly drifting glows in the three main colours of the day's photo (CSS in
-  `public/index.html`, still with reduce-motion; colours in `PUZZLE_GLOWS`, generated
-  with the photo list). Colours only, never the photo's layout, so it can't hint at
-  placement. The board and panels stay solid. A jigsaw-line pattern was tried and
-  rejected: it read as a second board.
+  is soft pools of colour drifting over the indigo, in the three main colours of the day's photo: a small WebGL
+  shader at low resolution (`src/ui/backdrop.ts`, 30 fps, still with reduce-motion,
+  plain indigo without WebGL; colours in `PUZZLE_GLOWS`, generated with the photo
+  list). Colours only, never the photo's layout, so it can't hint at placement.
+  Fine still scanlines over it (`public/index.html`) quieten the colour.
+  The board and panels stay solid. Tried and rejected: small grid and checkerboard overlays, a jigsaw-line pattern (read
+  as a second board), faint drifting CSS glows (movement too hard to notice), a swirling paint shader at
+  full strength (too bold to play over) and turned down (still too swirly).
   The pre-redesign look is kept
   on the Figma page "Original (live game, fbc1043)".
 - **`src/ui/`: React Native components.** Pieces are drawn with

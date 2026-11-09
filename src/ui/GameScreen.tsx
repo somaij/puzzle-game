@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   // Easy to find (full width, at the end of the column) but light, so it doesn't compete with the hand.
-  howButton: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, backgroundColor: 'transparent', borderColor: colors.pieceOutline },
+  howButton: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 8, backgroundColor: colors.background, borderColor: colors.pieceOutline },
   howButtonText: { ...type.button, color: colors.text },
   // White, not lemon: lemon only ever means what a piece is worth.
   primaryButton: { backgroundColor: colors.text, borderColor: colors.text, marginTop: 6 },
