@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * The indigo and lemon palette from the Figma design file ("Color" variables). The shipped
  * POC palette it replaced is recorded on the file's "Original (live game, fbc1043)" page.
@@ -28,6 +30,9 @@ export const colors = {
   /** Piece outlines, and any edge a player has to see (board, segments, outlined buttons): 3:1+ on every background. */
   pieceOutline: '#7c86c0',
 };
+
+/** What's behind the app: on web it's see-through, showing the animated backdrop in public/index.html. */
+export const pageBackground = Platform.OS === 'web' ? 'transparent' : colors.background;
 
 /** Semi-transparent versions for overlays. */
 export const overlays = {

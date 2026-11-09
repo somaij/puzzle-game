@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>Daily Jigsaw</title>
+    <meta name="description" content="One jigsaw a day, the same for everyone." />
+    <!-- Installing to a home screen. Paths are relative so the site works under any base path. -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#1f2442" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Daily Jigsaw" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+        /* The game's background, so an installed app doesn't flash white while it starts. */
+        background-color: #1f2442;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+        position: relative;
+      }
+      /* The backdrop: slowly drifting glows in the colours of the day's photo (set by
+         src/ui/backdrop.ts). Web only. Only `transform` animates, so the browser never has to repaint. */
+      #backdrop {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+      }
+      #backdrop div {
+        position: absolute;
+        width: 100vmax;
+        height: 100vmax;
+        border-radius: 50%;
+        opacity: 0;
+        transition: opacity 1.2s ease-out;
+        will-change: transform;
+        animation: 34s ease-in-out infinite alternate;
+      }
+      #backdrop.tinted div {
+        opacity: 1;
+      }
+      #backdrop .glow-1 {
+        top: -45vmax;
+        left: -35vmax;
+        background: radial-gradient(closest-side, rgba(var(--glow-1), 0.3), rgba(var(--glow-1), 0));
+        animation-name: drift-1;
+      }
+      #backdrop .glow-2 {
+        right: -40vmax;
+        bottom: -50vmax;
+        background: radial-gradient(closest-side, rgba(var(--glow-2), 0.26), rgba(var(--glow-2), 0));
+        animation-name: drift-2;
+        animation-duration: 41s;
+      }
+      #backdrop .glow-3 {
+        top: 10vmax;
+        right: -55vmax;
+        background: radial-gradient(closest-side, rgba(var(--glow-3), 0.2), rgba(var(--glow-3), 0));
+        animation-name: drift-3;
+        animation-duration: 47s;
+      }
+      @keyframes drift-1 {
+        to { transform: translate(45vmax, 35vmax) scale(1.15); }
+      }
+      @keyframes drift-2 {
+        to { transform: translate(-50vmax, -30vmax) scale(0.9); }
+      }
+      @keyframes drift-3 {
+        to { transform: translate(-70vmax, 25vmax) scale(1.2); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #backdrop div { animation: none !important; transition: none; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to play.</noscript>
+    <div id="backdrop" aria-hidden="true"><div class="glow-1"></div><div class="glow-2"></div><div class="glow-3"></div></div>
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,11 +1,13 @@
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { createPuzzle, imageIndexFor, puzzleNumber } from './src/engine/daily';
-import { PUZZLE_IMAGES } from './src/puzzleImages';
-import { colors } from './src/ui/colors';
+import { reloadWhenDayChanges, setUpOfflinePlay } from './src/pwa';
+import { PUZZLE_GLOWS, PUZZLE_IMAGES } from './src/puzzleImages';
+import { tintBackdrop } from './src/ui/backdrop';
+import { pageBackground } from './src/ui/colors';
 import { GameScreen } from './src/ui/GameScreen';
 import { FONT_FILES } from './src/ui/type';
 
@@ -32,12 +34,21 @@ export default function App() {
   // Only today's puzzle is the one-play daily; any other `?puzzle=N` is free practice.
   const [isDaily] = useState(() => number === puzzleNumber(new Date()));
   const puzzle = useMemo(() => createPuzzle(number), [number]);
+  useEffect(() => {
+    if (onWeb) setUpOfflinePlay(PUZZLE_IMAGES.length);
+  }, []);
+  useEffect(() => {
+    if (onWeb) tintBackdrop(PUZZLE_GLOWS[imageIndexFor(number, PUZZLE_GLOWS.length)]);
+  }, [number]);
+  useEffect(() => {
+    if (onWeb && isDaily) return reloadWhenDayChanges(number);
+  }, [isDaily, number]);
   // The fonts are bundled and small, so wait for them rather than flash the system font.
   // If one fails, carry on with the fallback rather than show a blank page.
   const [fontsLoaded, fontError] = useFonts(FONT_FILES);
   const image = PUZZLE_IMAGES[imageIndexFor(puzzle.number, PUZZLE_IMAGES.length)];
 
-  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: pageBackground }} />;
 
   return (
     <>

@@ -329,7 +329,13 @@ tenths); treat them as a starting point, not gospel.
   text styles. Fonts: Varela Round (body, labels, buttons) and Shantell Sans
   (titles, numbers, rising points), bundled in `assets/fonts/` under the OFL
   (see its README for the Shantell subset). Each weight is its own
-  `fontFamily`; never set `fontWeight` on them. The pre-redesign look is kept
+  `fontFamily`; never set `fontWeight` on them. On web the page behind the app
+  is slowly drifting glows in the three main colours of the day's photo (CSS in
+  `public/index.html`, still with reduce-motion; colours in `PUZZLE_GLOWS`, generated
+  with the photo list). Colours only, never the photo's layout, so it can't hint at
+  placement. The board and panels stay solid. A jigsaw-line pattern was tried and
+  rejected: it read as a second board.
+  The pre-redesign look is kept
   on the Figma page "Original (live game, fbc1043)".
 - **`src/ui/`: React Native components.** Pieces are drawn with
   **react-native-svg** (`<ClipPath>` + `<Image>`), not Skia: Skia's web build
@@ -342,6 +348,16 @@ tenths); treat them as a starting point, not gospel.
   serves at `/`). `npm run deploy` exports and pushes `dist/` to the `gh-pages`
   branch with `--nojekyll` (Jekyll would drop the `_expo/` folder). Moving to a
   custom domain or a host that serves from the root means removing `baseUrl`.
+- **Installable (PWA):** `public/` holds the page template, manifest and icons
+  (`scripts/make-icons.mjs` draws them); paths in those files are relative so the
+  base path can change. `npm run export:web` also writes `dist/sw.js`
+  (`scripts/build-service-worker.mjs`, logic in `scripts/service-worker.js`). The
+  page comes from the network when it can (3 s, then the saved copy), so a deploy
+  reaches players on their next open; hashed files come from the cache. Up front
+  it saves only the app itself; `src/pwa.ts` asks for today's photo and the next
+  3, so opening a link doesn't download the whole photo library. Dev builds don't
+  register it. An installed app is resumed rather than reopened, so the daily
+  reloads when it comes back on a new day.
 - **Privacy is a hard constraint.** No backend, accounts, analytics, ad SDKs, or
   any dependency that phones home, so flag it rather than adding it. Fonts must be
   bundled with the site (the POC loads Google Fonts from Google's servers; don't

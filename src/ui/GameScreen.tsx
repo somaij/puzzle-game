@@ -35,7 +35,7 @@ import {
 import { NO_STATS, recordResult, type Stats } from '../engine/result';
 import { getStoredFlag, getStoredJson, setStoredFlag, setStoredJson } from '../storage';
 import { Board, type FloatText } from './Board';
-import { colors, overlays } from './colors';
+import { colors, overlays, pageBackground } from './colors';
 import { FeedPanel, SIDE_PANEL_WIDTH } from './FeedPanel';
 import { HowToPlay } from './HowToPlay';
 import { OnboardingModal } from './OnboardingModal';
@@ -603,7 +603,7 @@ export function GameScreen({ puzzle, image, isDaily }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, userSelect: 'none' },
-  scroll: { flex: 1, backgroundColor: colors.background },
+  scroll: { flex: 1, backgroundColor: pageBackground },
   // Grows to at least the screen height, so the game stays centred when everything fits.
   screen: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SIDE_PADDING },
   screenWide: { paddingTop: 32, paddingBottom: 48 },

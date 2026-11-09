@@ -32,9 +32,9 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "export:web": "expo export --platform web",
+    "export:web": "expo export --platform web && node scripts/build-service-worker.mjs",
     "lint": "expo lint",
-    "predeploy": "expo export --platform web",
+    "predeploy": "npm run export:web",
     "deploy": "gh-pages --nojekyll -d dist",
     "photos:review": "node scripts/prepare-photos.mjs review",
     "photos:add": "node scripts/prepare-photos.mjs add"
