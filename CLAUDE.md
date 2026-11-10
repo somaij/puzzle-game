@@ -18,7 +18,7 @@ otherwise relaxing jigsaw. Inspired in spirit (not mechanics) by Balatro: a
 simple base action made deep by a scoring system.
 
 Product filter: **solo-buildable, minimal surface area, privacy-first.** No
-accounts, no backend, no ads, no analytics.
+accounts, no ads, and no backend beyond one small endpoint for anonymous game results.
 
 Earlier direction (now "later", see Product direction): a native Android app
 that makes jigsaws from *your own photos*, sold as a one-time purchase.
@@ -366,8 +366,18 @@ tenths); treat them as a starting point, not gospel.
   3, so opening a link doesn't download the whole photo library. Dev builds don't
   register it. An installed app is resumed rather than reopened, so the daily
   reloads when it comes back on a new day.
-- **Privacy is a hard constraint.** No backend, accounts, analytics, ad SDKs, or
-  any dependency that phones home, so flag it rather than adding it. Fonts must be
+- **Analytics (`src/analytics.ts`, `worker/`):** the one deliberate exception to
+  "no backend". The live site posts anonymous results to our own Cloudflare Worker,
+  which stores one row per event in D1. It's off until `ENDPOINT` is set. Events,
+  daily games only: `puzzle-start`, `puzzle-finish` (result, score, misses, top
+  speed, seconds per piece, islands, streak) and `result-share`. No cookies, player
+  ID, IP address or browser details are stored; streak stands in for retention.
+  The endpoint is public, so a row can be faked: fine for tuning, not for a
+  leaderboard. Deploy from `worker/` with `npx wrangler@latest deploy`; schema in
+  `worker/schema.sql`.
+- **Privacy is a hard constraint.** No accounts, ad SDKs, tracking cookies, other
+  backends, or any other dependency that phones home, so flag it rather than
+  adding it. Fonts must be
   bundled with the site (the POC loads Google Fonts from Google's servers; don't
   copy that).
 - **Expo changes every SDK release.** Before using an Expo/RN API, check the

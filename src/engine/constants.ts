@@ -40,3 +40,6 @@ export const DECAY_TICK_MS = 1000;
 export const WRONG_PENALTY_TENTHS = 1;
 export const PULSE_RADIUS = 1;
 export const PULSE_MS = 6000;
+
+// Longest gap between placements that counts as playing, so a phone call doesn't distort a game's pace.
+export const MAX_COUNTED_GAP_MS = 30000;

@@ -33,7 +33,8 @@ import {
   type Miss,
   type Placement,
 } from '../engine/game';
-import { NO_STATS, recordResult, type Stats } from '../engine/result';
+import { finishedGameEvent, NO_STATS, recordResult, type Stats } from '../engine/result';
+import { trackEvent } from '../analytics';
 import { getStoredFlag, getStoredJson, setStoredFlag, setStoredJson } from '../storage';
 import { Board, type FloatText } from './Board';
 import { colors, overlays, pageBackground } from './colors';
@@ -202,7 +203,10 @@ export function GameScreen({ puzzle, image, isDaily }: Props) {
   });
   const started = phase === 'playing';
   const startPreview = () => {
-    if (isDaily) setStoredJson(SAVE_KEY, { puzzle: puzzle.number, previewStartedAt: Date.now() } satisfies SavedGame);
+    if (isDaily) {
+      setStoredJson(SAVE_KEY, { puzzle: puzzle.number, previewStartedAt: Date.now() } satisfies SavedGame);
+      trackEvent('puzzle-start', { puzzle: puzzle.number });
+    }
     setPhase('previewing');
   };
   const endPreview = useCallback(() => {
@@ -346,6 +350,7 @@ export function GameScreen({ puzzle, image, isDaily }: Props) {
       // The score is final at the win or the last miss; finishing the picture afterwards changes nothing.
       if (isDaily && game.status === 'playing') {
         const next = recordResult(stats, { puzzle: puzzle.number, won: state.status === 'won', score: state.score });
+        if (next !== stats) trackEvent('puzzle-finish', finishedGameEvent(state, puzzle.number, moves, next.streak));
         setStats(next);
         setStoredJson(STATS_KEY, next);
       }

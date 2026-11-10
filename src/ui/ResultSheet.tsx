@@ -4,6 +4,7 @@ import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from '
 import { PIECE_COUNT } from '../engine/constants';
 import type { GameState } from '../engine/game';
 import { currentStreak, shareText, type Stats } from '../engine/result';
+import { trackEvent } from '../analytics';
 import { colors, overlays } from './colors';
 import { withCommas, type MoveRecord } from './ScoreCard';
 import { type } from './type';
@@ -135,6 +136,7 @@ export function ResultSheet({ puzzleNumber, game, moves, stats, onClose, onFinis
     const outcome = await shareOrCopy(shareText({ puzzle: puzzleNumber, won, score: game.score, placed, moves }, shareUrl()));
     if (outcome === 'copied') setFeedback('Copied!');
     if (outcome === 'failed') setFeedback("Couldn't copy");
+    if (stats && (outcome === 'shared' || outcome === 'copied')) trackEvent('result-share', { puzzle: puzzleNumber });
   };
 
   const summary = won

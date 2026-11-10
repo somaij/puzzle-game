@@ -1,0 +1,20 @@
+name = "puzzle-game-analytics"
+main = "src/index.ts"
+compatibility_date = "2026-11-10"
+
+[vars]
+ALLOWED_ORIGIN = "https://somaij.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "puzzle-game-analytics"
+# Printed by `npx wrangler@latest d1 create puzzle-game-analytics`.
+database_id = "3dbcd76f-1c69-4410-93e6-dd420508059c"
+
+[[ratelimits]]
+name = "RATE_LIMIT"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60

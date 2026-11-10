@@ -4,6 +4,7 @@ import {
   FAST_MS,
   HAND_SIZE,
   ISLAND_POINTS,
+  MAX_COUNTED_GAP_MS,
   MISS_LIMIT,
   MULT_MAX_TENTHS,
   MULT_MIN_TENTHS,
@@ -60,6 +61,8 @@ export type GameState = {
   lastPlacedAt: number;
   /** Stall-decay steps already applied since `lastPlacedAt`. */
   decaySteps: number;
+  /** Time spent placing the pieces so far, with each gap capped at MAX_COUNTED_GAP_MS. */
+  playMs: number;
   ghosts: readonly Ghost[];
   moves: readonly Move[];
 };
@@ -91,6 +94,7 @@ export function newGame(puzzle: Puzzle, now: number): GameState {
     misses: 0,
     lastPlacedAt: now,
     decaySteps: 0,
+    playMs: 0,
     ghosts: [],
     moves: [],
   };
@@ -102,7 +106,8 @@ export function newGame(puzzle: Puzzle, now: number): GameState {
  * applies any decay that came due). Pulse ghosts don't survive.
  */
 export function resumeGame(saved: GameState, idleMs: number, now: number): GameState {
-  return { ...saved, lastPlacedAt: now - idleMs, ghosts: [] };
+  // Games saved before play time was recorded have no `playMs`.
+  return { ...saved, lastPlacedAt: now - idleMs, playMs: saved.playMs ?? 0, ghosts: [] };
 }
 
 /** Whether `piece` can be dragged right now: it's in the hand or the hold slot. */
@@ -279,6 +284,7 @@ export function dropPiece(
       multTenths,
       lastPlacedAt: now,
       decaySteps: 0,
+      playMs: s.playMs + Math.min(now - s.lastPlacedAt, MAX_COUNTED_GAP_MS),
       ghosts,
       moves: [...s.moves, island ? 'island' : 'snap'],
     },

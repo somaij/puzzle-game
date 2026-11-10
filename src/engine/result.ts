@@ -1,4 +1,5 @@
 import { PIECE_COUNT } from './constants';
+import type { GameState } from './game';
 
 /** The working title, shown in the shared result. */
 export const GAME_NAME = 'Daily Jigsaw';
@@ -18,18 +19,37 @@ export type Result = {
   moves: readonly ScoredMove[];
 };
 
+/** The highest multiplier any piece was paid at, in tenths. */
+function topSpeedTenths(moves: readonly ScoredMove[]): number {
+  return moves.reduce((top, m) => (m.kind === 'miss' ? top : Math.max(top, m.multTenths)), 10);
+}
+
+/**
+ * What the analytics event records about a finished daily game. Nothing identifies the player.
+ */
+export function finishedGameEvent(game: GameState, puzzle: number, moves: readonly ScoredMove[], streak: number) {
+  const placed = game.moves.filter((m) => m !== 'miss').length;
+  return {
+    puzzle,
+    result: game.status === 'won' ? 'solved' : 'out-of-misses',
+    score: game.score,
+    misses: game.misses,
+    // The move list passed in may not include the final placement yet; the game's multiplier does.
+    top_speed: Math.max(topSpeedTenths(moves), game.multTenths) / 10,
+    seconds_per_piece: placed === 0 ? 0 : Math.round(game.playMs / placed / 100) / 10,
+    islands: game.moves.filter((m) => m === 'island').length,
+    streak,
+  };
+}
+
 /**
  * The text a player shares, in plain words so anyone in a group chat can read it without having
  * played. (A grid of coloured squares was tried: it needed a legend, and Wordle's only works
  * because everyone already knows it.)
  */
 export function shareText({ puzzle, won, score, placed, moves }: Result, url: string): string {
-  let topSpeed = 10;
-  let misses = 0;
-  for (const m of moves) {
-    if (m.kind === 'miss') misses++;
-    else topSpeed = Math.max(topSpeed, m.multTenths);
-  }
+  const topSpeed = topSpeedTenths(moves);
+  const misses = moves.filter((m) => m.kind === 'miss').length;
   const outcome = won
     ? ['✅ Solved', misses === 0 ? '🎯 No misses' : `❌ ${misses} ${misses === 1 ? 'miss' : 'misses'}`]
     : [`💔 Out of misses at ${placed}/${PIECE_COUNT} pieces`];
