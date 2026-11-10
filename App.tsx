@@ -14,11 +14,12 @@ import { FONT_FILES } from './src/ui/type';
 const onWeb = Platform.OS === 'web' && typeof window !== 'undefined';
 
 /**
- * The puzzles `?puzzle=N` can open (a testing aid until checkpoint 4 decides what players can
- * reach): every day up to today, and far enough ahead to reach every bundled photo. The ‹ ›
- * switcher was removed from the screen in the quieter design; the URL still works.
+ * The puzzles `?puzzle=N` can open: every day up to today, as replayable practice. Future days
+ * would let players rehearse a puzzle before it counts, so only dev builds can reach them (to
+ * check every bundled photo).
  */
-const lastPuzzle = Math.max(puzzleNumber(new Date()), PUZZLE_IMAGES.length);
+const today = puzzleNumber(new Date());
+const lastPuzzle = __DEV__ ? Math.max(today, PUZZLE_IMAGES.length) : today;
 
 /** Today's puzzle, unless `?puzzle=N` in the web URL picks another. */
 function initialPuzzleNumber(): number {

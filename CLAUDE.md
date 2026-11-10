@@ -297,12 +297,15 @@ tenths); treat them as a starting point, not gospel.
   would show a different photo. Appending only changes days that would
   otherwise have wrapped around to image 1, so keep the list ahead of today.
 - **Adding your own photos:** see the `add-photos` skill for the workflow.
-- **Switching puzzles (testing aid):** `?puzzle=N` in the URL opens any
-  puzzle from 1 to `max(today, image count)`, so every past day and every
-  bundled photo is reachable (in dev and in the live build). The on-screen
-  ‹ › switcher was removed in the quieter design. Checkpoint 4's
-  one-play-per-day loop has to decide whether players keep this (e.g. as an
-  archive of past days) or it goes back to dev-only.
+- **Switching puzzles:** `?puzzle=N` in the URL opens any past day as free
+  practice, up to today. Future days are dev-only (`max(today, image count)`, to
+  check every bundled photo): on the live build they would let players rehearse
+  a puzzle before it counts. The on-screen ‹ › switcher was removed in the
+  quieter design.
+- **Replays can't be fully blocked.** Clearing site data, a private window,
+  another device or a changed date all give a fresh play, as with Wordle.
+  Accepted: stopping it needs accounts and a server, and a score worked out in
+  the browser could still be faked.
 
 ## Product direction
 
