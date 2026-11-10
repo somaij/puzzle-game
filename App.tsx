@@ -38,7 +38,7 @@ export default function App() {
     if (onWeb) setUpOfflinePlay(PUZZLE_IMAGES.length);
   }, []);
   useEffect(() => {
-    if (onWeb) return startBackdrop(PUZZLE_GLOWS[imageIndexFor(number, PUZZLE_GLOWS.length)]);
+    if (onWeb) return startBackdrop(PUZZLE_GLOWS[imageIndexFor(number, PUZZLE_GLOWS.length)][0]);
   }, [number]);
   useEffect(() => {
     if (onWeb && isDaily) return reloadWhenDayChanges(number);

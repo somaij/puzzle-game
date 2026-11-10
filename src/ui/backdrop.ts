@@ -1,5 +1,5 @@
 /**
- * Web only: the page's background, soft pools of colour drifting over the indigo, in the colours of the day's photo. Colours
+ * Web only: the page's background, one soft blob pulsing over the indigo, in the main colour of the day's photo. Colours
  * and never the photo's layout, so it can't hint at where a piece goes.
  *
  * It's a small WebGL shader drawn into a tiny canvas that CSS stretches to the window: the shapes are
@@ -12,8 +12,6 @@ const RESOLUTION = 180;
 const FRAME_MS = 1000 / 30;
 /** How much of each photo colour lights the indigo. Low, so the paint stays behind the game. */
 const COLOUR_STRENGTH = 0.34;
-/** A third of the shader's natural pace: a pool crosses the screen in 25-30 s. Faster pulled the eye on a phone. */
-const SPEED = 0.33;
 const BASE_COLOUR = [31 / 255, 36 / 255, 66 / 255];
 
 const VERTEX = `
@@ -29,7 +27,7 @@ precision mediump float;
 #endif
 uniform vec2 size;
 uniform float time;
-uniform vec3 base, first, second, third;
+uniform vec3 base, blob;
 
 // How much of a colour reaches this point: full at its centre, gone by its edge.
 float pool(vec2 p, vec2 centre, float radius) {
@@ -40,14 +38,13 @@ float pool(vec2 p, vec2 centre, float radius) {
 void main() {
   vec2 reach = 0.5 * size / min(size.x, size.y);
   vec2 p = (gl_FragCoord.xy - 0.5 * size) / min(size.x, size.y);
-  // A slight wobble, so the pools aren't perfect circles.
-  p += 0.09 * sin(p.yx * 2.3 + vec2(time * 0.31, -time * 0.23));
+  // A slight wobble, so it isn't a perfect circle.
+  p += 0.07 * sin(p.yx * 2.3 + vec2(time * 0.2, -time * 0.15));
 
-  vec3 colour = base;
-  colour += (first - base) * pool(p, reach * vec2(sin(time * 0.37), cos(time * 0.29)), 0.95);
-  colour += (second - base) * pool(p, reach * vec2(cos(time * 0.31 + 2.0), sin(time * 0.41 + 1.0)), 0.85);
-  colour += (third - base) * pool(p, reach * vec2(sin(time * 0.43 + 4.0), cos(time * 0.35 + 3.0)), 0.75);
-  gl_FragColor = vec4(colour, 1.0);
+  // Breathes in and out over about 8 seconds, wide enough to show around the panels.
+  float breath = 0.5 + 0.5 * sin(time * 0.8);
+  float glow = pool(p, vec2(0.0), length(reach) * (0.85 + 0.3 * breath));
+  gl_FragColor = vec4(base + (blob - base) * glow * (0.65 + 0.35 * breath), 1.0);
 }
 `;
 
@@ -59,15 +56,26 @@ function compile(gl: WebGLRenderingContext, kind: number, source: string) {
   return shader;
 }
 
-// Added to the indigo like light, because a faint orange blended over indigo turns brown.
-const paintColour = (rgb: string) => rgb.split(',').map((n, i) => BASE_COLOUR[i] + (Number(n) / 255) * COLOUR_STRENGTH);
+const toUnit = (rgb: string) => rgb.split(',').map((n) => Number(n) / 255);
+
+/**
+ * Keeps each scanline a whole number of screen pixels. Many phones have a fractional pixel ratio
+ * (2.625, say), where a line of exactly 1 CSS pixel comes out unevenly spaced and bands visibly.
+ */
+function fitScanlines() {
+  const ratio = window.devicePixelRatio || 1;
+  document.getElementById('backdrop-overlay')?.style.setProperty('--line', `${Math.max(1, Math.round(ratio)) / ratio}px`);
+}
 
 /** Starts the background; returns a function that stops it. */
-export function startBackdrop(glows: readonly string[]): () => void {
+export function startBackdrop(colour: string): () => void {
   const canvas = document.getElementById('backdrop');
   if (!(canvas instanceof HTMLCanvasElement)) return () => undefined;
   const gl = canvas.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: 'low-power' });
   if (!gl) return () => undefined;
+
+  // Added to the indigo like light, because a faint orange blended over indigo turns brown.
+  const blob = toUnit(colour).map((c, i) => BASE_COLOUR[i] + c * COLOUR_STRENGTH);
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let uniforms: { size: WebGLUniformLocation | null; time: WebGLUniformLocation | null } | null = null;
@@ -94,12 +102,13 @@ export function startBackdrop(glows: readonly string[]): () => void {
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
 
     gl.uniform3fv(gl.getUniformLocation(program, 'base'), BASE_COLOUR);
-    ['first', 'second', 'third'].forEach((name, i) => gl.uniform3fv(gl.getUniformLocation(program, name), paintColour(glows[i])));
+    gl.uniform3fv(gl.getUniformLocation(program, 'blob'), blob);
     uniforms = { size: gl.getUniformLocation(program, 'size'), time: gl.getUniformLocation(program, 'time') };
     needsDraw = true;
   };
 
   const fitToWindow = () => {
+    fitScanlines();
     const scale = RESOLUTION / Math.min(window.innerWidth, window.innerHeight);
     canvas.width = Math.round(window.innerWidth * scale);
     canvas.height = Math.round(window.innerHeight * scale);
@@ -114,7 +123,7 @@ export function startBackdrop(glows: readonly string[]): () => void {
     lastDraw = now;
     needsDraw = false;
     gl.uniform2f(uniforms.size, canvas.width, canvas.height);
-    gl.uniform1f(uniforms.time, reduceMotion.matches ? 0 : (now / 1000) * SPEED);
+    gl.uniform1f(uniforms.time, reduceMotion.matches ? 0 : now / 1000);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     canvas.classList.add('on');
   };
