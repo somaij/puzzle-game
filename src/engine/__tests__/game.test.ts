@@ -22,6 +22,7 @@ import {
   missesLeft,
   newGame,
   pointsFor,
+  resumeGame,
   tick,
   type GameState,
 } from '../game';
@@ -42,6 +43,40 @@ function place(state: GameState, piece: number, now = 0): GameState {
   expect(result).toBe('placed');
   return next;
 }
+
+describe('resumeGame', () => {
+  // Two fast placements on one page load: ×1.2, last placed at 2000, with pulse ghosts showing.
+  const played = place(place(newGame(rowMajor, 0), 0, 1000), 1, 2000);
+  // A reloaded page's clock starts again near zero.
+  const reloadedAt = 50;
+
+  it('gives no fast bonus once the fast window has passed, however the page was reloaded', () => {
+    const { placement, state } = dropPiece(resumeGame(played, FAST_MS + 1, reloadedAt), 2, 2, reloadedAt);
+    expect(placement?.fast).toBe(false);
+    expect(state.multTenths).toBe(played.multTenths);
+  });
+
+  it('keeps the fast window open across a quick reload', () => {
+    const { placement, state } = dropPiece(resumeGame(played, 500, reloadedAt), 2, 2, reloadedAt);
+    expect(placement?.fast).toBe(true);
+    expect(state.multTenths).toBe(played.multTenths + 1);
+  });
+
+  it('applies stall decay that came due while the page was away', () => {
+    expect(tick(resumeGame(played, FIRST_DROP, reloadedAt), reloadedAt).multTenths).toBe(played.multTenths - 1);
+  });
+
+  it("doesn't apply a decay step twice", () => {
+    const decayed = tick(played, 2000 + FIRST_DROP);
+    expect(decayed.multTenths).toBe(played.multTenths - 1);
+    expect(tick(resumeGame(decayed, FIRST_DROP, reloadedAt), reloadedAt).multTenths).toBe(decayed.multTenths);
+  });
+
+  it('drops pulse ghosts', () => {
+    expect(played.ghosts.length).toBeGreaterThan(0);
+    expect(resumeGame(played, 0, reloadedAt).ghosts).toEqual([]);
+  });
+});
 
 /** Place the lowest-numbered playable piece (in rowMajor, the next one row by row). */
 function placeLowest(state: GameState, now = 0): GameState {

@@ -96,6 +96,15 @@ export function newGame(puzzle: Puzzle, now: number): GameState {
   };
 }
 
+/**
+ * Pick a saved game back up, `idleMs` after its last placement. The clocks carry on as if the page
+ * had stayed open, so reloading can't earn a fast placement or dodge stall decay (the next `tick`
+ * applies any decay that came due). Pulse ghosts don't survive.
+ */
+export function resumeGame(saved: GameState, idleMs: number, now: number): GameState {
+  return { ...saved, lastPlacedAt: now - idleMs, ghosts: [] };
+}
+
 /** Whether `piece` can be dragged right now: it's in the hand or the hold slot. */
 export function isPlayable(state: GameState, piece: number): boolean {
   return (state.status === 'playing' || state.status === 'finishing') && (state.hand.includes(piece) || state.hold === piece);

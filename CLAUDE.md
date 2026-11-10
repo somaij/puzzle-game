@@ -36,7 +36,8 @@ column). There is no header and no mid-game Restart (the quieter design, see
 docs/ux-research-complexity.md).
 
 Today's puzzle is **one play**: it saves after every change (`SavedGame` in
-`GameScreen`), so a reload resumes it and a finished one reopens on its result
+`GameScreen`), so a reload resumes it (the speed clocks keep running while the
+page is away, as if it had stayed open) and a finished one reopens on its result
 (`ResultSheet`: score breakdown, stats, share, countdown to local midnight). The
 preview also can't be restarted by reloading. Stats live in localStorage
 (`src/engine/result.ts`); the streak counts days played, not days solved, because

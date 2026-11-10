@@ -27,6 +27,7 @@ import {
   holdPiece,
   missesLeft,
   newGame,
+  resumeGame,
   tick,
   type GameState,
   type Miss,
@@ -59,6 +60,9 @@ type SavedGame = {
   /** Set when the photo preview starts, so reloading can't show it again from the top. */
   previewStartedAt?: number;
   game?: GameState;
+  /** The engine's clock restarts with the page, so the save records how long it had been since the last placement, and when. */
+  idleMs?: number;
+  savedAt?: number;
   moves?: MoveRecord[];
   tried?: Record<number, number[]>;
 };
@@ -71,6 +75,12 @@ const RESULT_DELAY_MS = 1500;
 function loadSave(puzzleNumber: number): SavedGame | null {
   const saved = getStoredJson<SavedGame>(SAVE_KEY);
   return saved?.puzzle === puzzleNumber ? saved : null;
+}
+
+/** How long it has been since the saved game's last placement, counting the time the page was away. */
+function idleSince(saved: SavedGame): number {
+  const away = saved.savedAt === undefined ? 0 : Math.max(0, Date.now() - saved.savedAt);
+  return (saved.idleMs ?? 0) + away;
 }
 
 type Rect = { x: number; y: number; width: number; height: number };
@@ -160,8 +170,7 @@ export function GameScreen({ puzzle, image, isDaily }: Props) {
   // Today's game, if it was already started on this device.
   const [saved] = useState(() => (isDaily ? loadSave(puzzle.number) : null));
   const [game, setGame] = useState<GameState>(() =>
-    // The clocks are per-page-load, so a resumed game restarts them; pulse ghosts don't survive.
-    saved?.game ? { ...saved.game, lastPlacedAt: now(), decaySteps: 0, ghosts: [] } : newGame(puzzle, now()),
+    saved?.game ? resumeGame(saved.game, idleSince(saved), now()) : newGame(puzzle, now()),
   );
   // Every placement and miss as the score card draws it (what each piece was worth, at what speed).
   const [moves, setMoves] = useState<MoveRecord[]>(() => saved?.moves ?? []);
@@ -212,7 +221,16 @@ export function GameScreen({ puzzle, image, isDaily }: Props) {
 
   // Save today's game as it changes, so closing the page can't give a second go at it.
   useEffect(() => {
-    if (isDaily && phase === 'playing') setStoredJson(SAVE_KEY, { puzzle: puzzle.number, game, moves, tried } satisfies SavedGame);
+    if (isDaily && phase === 'playing') {
+      setStoredJson(SAVE_KEY, {
+        puzzle: puzzle.number,
+        game,
+        idleMs: now() - game.lastPlacedAt,
+        savedAt: Date.now(),
+        moves,
+        tried,
+      } satisfies SavedGame);
+    }
   }, [isDaily, phase, puzzle.number, game, moves, tried]);
 
   // Flow decay and pulse fade depend on time passing, not just on moves.
