@@ -229,7 +229,7 @@ async function add() {
   const creditsText = await readFile(CREDITS_FILE, 'utf8');
   await writeFile(CREDITS_FILE, creditsText.trimEnd() + '\n' + credits.join('\n') + '\n');
   const total = await writeImageList();
-  console.log(`\nAdded ${credits.length}; the game now has ${total} daily images. Commit, push and \`npm run deploy\` to publish.`);
+  console.log(`\nAdded ${credits.length}; the game now has ${total} daily images. Commit and push to main to publish.`);
 }
 
 function toHsl(r, g, b) {

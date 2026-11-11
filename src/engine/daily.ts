@@ -2,8 +2,11 @@ import { PIECE_COUNT } from './constants';
 import { generateCuts, type Cut } from './cuts';
 import { mulberry32, shuffle } from './rng';
 
-/** Puzzle #1 is on this local calendar date. Placeholder until a launch date is set. */
-export const LAUNCH_DATE = { year: 2026, month: 9, day: 21 };
+/**
+ * Puzzle #1 is on this local calendar date. Set to the day local testing of the fresh start began;
+ * move it to the real launch day before this goes live, so launch day is #1.
+ */
+export const LAUNCH_DATE = { year: 2026, month: 11, day: 11 };
 
 const MS_PER_DAY = 86_400_000;
 

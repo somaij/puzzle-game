@@ -19,7 +19,7 @@ location most photos carry) are never committed.
    resized to 1280×853, stripped of all metadata, saved as the next
    `assets/puzzles/NNNN.jpg`, credited in `assets/puzzles/CREDITS.md` and added
    to the day list. The original moves to `photos-inbox/added/`.
-5. **Publish:** commit, push, and `npm run deploy`.
+5. **Publish:** commit and push to `main`; Cloudflare builds and deploys it.
 
 Photos join the end of the list in file-name order, one per day. Rename files
 before adding if you want a particular order.
