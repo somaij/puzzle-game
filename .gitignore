@@ -44,3 +44,6 @@ yarn-error.*
 # Only the README is tracked; prepared copies go to assets/puzzles/ via `npm run photos:add`.
 /photos-inbox/*
 !/photos-inbox/README.md
+
+# Cloudflare Wrangler local state
+.wrangler/

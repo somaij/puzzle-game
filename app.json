@@ -21,9 +21,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "experiments": {
-      "baseUrl": "/puzzle-game"
-    },
     "plugins": [
       "expo-font"
     ]

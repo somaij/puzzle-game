@@ -21,7 +21,7 @@ type Props = {
   onReplay: () => void;
 };
 
-const SITE_URL = 'https://somaij.github.io/puzzle-game/';
+const SITE_URL = 'https://jigsup.fun/';
 const shareUrl = () => (Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin + window.location.pathname : SITE_URL);
 
 /** Phones get the system share sheet; desktops copy, since a share dialog there is rarely what's wanted. */

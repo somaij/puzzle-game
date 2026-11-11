@@ -1,0 +1,33 @@
+# The live site: one Cloudflare Worker serves the built game (dist/) and takes anonymous results at
+# /api/results. Cloudflare builds and deploys it on every push to main (Workers Builds); see the
+# Hosting notes in CLAUDE.md. Static files are free and unlimited; only /api/* runs the Worker code.
+name = "jigsup"
+main = "worker/src/index.ts"
+compatibility_date = "2026-11-11"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[routes]]
+pattern = "jigsup.fun"
+custom_domain = true
+
+[vars]
+# Same-site posts only: results from any other page are refused.
+ALLOWED_ORIGIN = "https://jigsup.fun"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "puzzle-game-analytics"
+# Printed by `wrangler d1 create puzzle-game-analytics`. Schema: worker/schema.sql.
+database_id = "3dbcd76f-1c69-4410-93e6-dd420508059c"
+
+[[ratelimits]]
+name = "RATE_LIMIT"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60

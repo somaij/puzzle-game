@@ -2,6 +2,8 @@ import { parseEvent, type EventRow } from './parse';
 
 type Env = {
   ALLOWED_ORIGIN: string;
+  /** The built game (dist/), served for every path outside /api/. */
+  ASSETS: { fetch(request: Request): Promise<Response> };
   DB: { prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown> } } };
   RATE_LIMIT?: { limit(options: { key: string }): Promise<{ success: boolean }> };
 };
@@ -22,9 +24,14 @@ function readBody(text: string): EventRow | null {
   }
 }
 
+/** Where the game posts its results. Same site as the game, so privacy blockers don't treat it as a tracker. */
+const RESULTS_PATH = '/api/results';
+
+// Only /api/* reaches this code (run_worker_first in wrangler.toml); everything else is a static file.
 // The game posts with sendBeacon as plain text: no preflight, and it never reads the response.
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (new URL(request.url).pathname !== RESULTS_PATH) return env.ASSETS.fetch(request);
     if (request.method !== 'POST') return respond(405);
     if (request.headers.get('Origin') !== env.ALLOWED_ORIGIN) return respond(403);
     // The address is only a short-lived counter key here. It is never stored.

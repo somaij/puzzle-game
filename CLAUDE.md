@@ -45,8 +45,10 @@ preview also can't be restarted by reloading. Stats live in localStorage
 a day's difficulty depends on its photo. Any other `?puzzle=N` is free practice:
 replayable, unsaved and uncounted.
 
-Test build is live at https://somaij.github.io/puzzle-game/ (GitHub Pages,
-public repo `somaij/puzzle-game`). Redeploy with `npm run deploy`.
+Live at **https://jigsup.fun** (a Cloudflare Worker; public repo
+`somaij/puzzle-game`). **Every push to `main` goes live**: Cloudflare builds
+and deploys it (Workers Builds), so only finished work goes on `main`. The old
+address, https://somaij.github.io/puzzle-game/, only forwards there.
 
 ## The POC (read this first)
 
@@ -353,11 +355,19 @@ tenths); treat them as a starting point, not gospel.
   SVG ids share one namespace per web page, so clip ids come from `useId()`.
 - **Web output:** single-page static site (`expo export --platform web` →
   `dist/`), no Expo Router, no server.
-- **Hosting (testing):** GitHub Pages serves the site under `/puzzle-game/`, so
-  `app.json` sets `experiments.baseUrl: "/puzzle-game"` (the dev server still
-  serves at `/`). `npm run deploy` exports and pushes `dist/` to the `gh-pages`
-  branch with `--nojekyll` (Jekyll would drop the `_expo/` folder). Moving to a
-  custom domain or a host that serves from the root means removing `baseUrl`.
+- **Hosting:** one Cloudflare Worker, `jigsup` (`wrangler.toml` at the repo
+  root), on the custom domain jigsup.fun (registered at Cloudflare). It serves
+  `dist/` as static assets (free and unlimited) and runs code only for
+  `/api/*` (`run_worker_first`), which is the results endpoint. Workers Builds
+  is connected to the GitHub repo: on a push to `main` it runs
+  `npm run export:web` then `npx wrangler deploy`; a failed build leaves the
+  last good version live. A manual deploy is `npm run deploy` (Wrangler needs
+  Node 22+). The site serves from the root, so there's no `baseUrl`.
+  The old GitHub Pages address (`gh-pages` branch) is a forwarding page that
+  keeps `?puzzle=N`, plus a `sw.js` that clears the old offline copy and
+  unregisters itself. Free-plan limit: 100,000 Worker requests a day, which only
+  results count toward; past it, results are refused until midnight UTC and the
+  game keeps working.
 - **Installable (PWA):** `public/` holds the page template, manifest and icons
   (`scripts/make-icons.mjs` draws them); paths in those files are relative so the
   base path can change. `npm run export:web` also writes `dist/sw.js`
@@ -369,14 +379,19 @@ tenths); treat them as a starting point, not gospel.
   register it. An installed app is resumed rather than reopened, so the daily
   reloads when it comes back on a new day.
 - **Analytics (`src/analytics.ts`, `worker/`):** the one deliberate exception to
-  "no backend". The live site posts anonymous results to our own Cloudflare Worker,
-  which stores one row per event in D1. It's off until `ENDPOINT` is set. Events,
+  "no backend". The live site posts anonymous results to `/api/results` on its
+  own domain (the `jigsup` Worker, code in `worker/src/`), which stores one row
+  per event in D1 (database `puzzle-game-analytics`). Same-site on purpose:
+  privacy blockers (EasyPrivacy's `$ping,third-party`) drop background posts to
+  other sites, so a separate address lost every blocker user's results. Events,
   daily games only: `puzzle-start`, `puzzle-finish` (result, score, misses, top
   speed, seconds per piece, islands, streak) and `result-share`. No cookies, player
   ID, IP address or browser details are stored; streak stands in for retention.
   The endpoint is public, so a row can be faked: fine for tuning, not for a
-  leaderboard. Deploy from `worker/` with `npx wrangler@latest deploy`; schema in
-  `worker/schema.sql`.
+  leaderboard. Only posts from `https://jigsup.fun` are accepted (`ALLOWED_ORIGIN`),
+  so local builds send nothing that sticks. Schema in `worker/schema.sql`. An
+  older standalone Worker, `puzzle-game-analytics`, still takes results from
+  copies of the game loaded before the move; delete it once those are gone.
 - **Privacy is a hard constraint.** No accounts, ad SDKs, tracking cookies, other
   backends, or any other dependency that phones home, so flag it rather than
   adding it. Fonts must be
@@ -403,8 +418,8 @@ Run typecheck, lint and tests before calling a task done.
      including the end-of-deck fix.
   3. ✅ Scoring + flow multiplier + pulse + 12-miss limit.
   4. ✅ Daily loop: one play per day, result screen, share text, stats/streak.
-  5. Publish the static web build. (Test build already on GitHub Pages; the
-     public launch, and its domain, is still to decide.)
+  5. Publish the static web build. (Live at jigsup.fun; the public launch is
+     still to come.)
   6. Later: Android build, Zen mode, monetization.
 - **Adversarial evaluation.** Pressure-test ideas; push back on hand-wavy
   reasoning rather than validating by default. Update positions with precision.
@@ -450,7 +465,7 @@ Run typecheck, lint and tests before calling a task done.
     "no ads" principle, so it has to be a conscious decision. Brands will want
     proof of reach; the privacy-friendly answer is counting requests for each
     day's image at the host (no cookies, no per-person tracking), which needs a
-    host with request stats (e.g. Cloudflare Pages), not GitHub Pages.
+    host with request stats, which Cloudflare (the host now) provides.
   - *Paid personal daily slot (people):* rejected. A stranger's personal photo
     makes the shared puzzle worse for everyone else and raises consent issues
     (faces, children). What people really want is a private puzzle to send
@@ -459,8 +474,7 @@ Run typecheck, lint and tests before calling a task done.
   - *Better fits sooner:* a tip jar, a paid archive of past puzzles, and a
     one-time unlock in the app.
   - *Cheap prep now:* store each image with a title, credit and optional link
-    rather than just a file (a sponsor later is just a different credit), and
-    measure daily players privately when moving off GitHub Pages.
+    rather than just a file (a sponsor later is just a different credit).
 
 ## Brand
 
@@ -483,6 +497,6 @@ Run typecheck, lint and tests before calling a task done.
   result card.
 - Mock-up: `docs/brand/jigsup-brand.png` (a sketch; the final logo needs drawing
   as proper artwork).
-- **Domain:** not bought yet. jigsup.com is taken; jigsup.day (preferred) and
-  jigsup.app looked free on 2026-11-10. Move off GitHub Pages before the public
-  launch, so early players' streaks (saved per web address) aren't lost.
+- **Domain:** jigsup.fun (bought 2026-11-11, at Cloudflare). Stats and streaks
+  are saved per web address, so players from the GitHub Pages days started
+  fresh there; that was accepted, and is why the move happened before launch.

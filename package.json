@@ -19,7 +19,6 @@
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
-    "gh-pages": "^6.3.0",
     "jest": "^29.7.0",
     "jest-expo": "^57.0.5",
     "sharp": "^0.35.4",
@@ -34,8 +33,7 @@
     "typecheck": "tsc --noEmit",
     "export:web": "expo export --platform web && node scripts/build-service-worker.mjs",
     "lint": "expo lint",
-    "predeploy": "npm run export:web",
-    "deploy": "gh-pages --nojekyll -d dist",
+    "deploy": "npm run export:web && npx wrangler deploy",
     "photos:review": "node scripts/prepare-photos.mjs review",
     "photos:add": "node scripts/prepare-photos.mjs add"
   },
