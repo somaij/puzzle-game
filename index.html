@@ -2,69 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Jigsup: one jigsaw a day</title>
-    <meta name="description" content="One jigsaw a day. Miss twelve and the jig is up." />
-    <!-- Installing to a home screen. Paths are relative so the site works under any base path. -->
-    <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#1f2442" />
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-    <meta name="apple-mobile-web-app-title" content="Jigsup" />
-    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
-    <style id="expo-reset">
-      /* These styles make the body full-height */
-      html,
-      body {
-        height: 100%;
-        /* The game's background, so an installed app doesn't flash white while it starts. */
-        background-color: #1f2442;
-      }
-      /* These styles disable body scrolling if you are using <ScrollView> */
-      body {
-        overflow: hidden;
-      }
-      /* These styles make the root element full-height */
-      #root {
-        display: flex;
-        height: 100%;
-        flex: 1;
-        position: relative;
-      }
-      /* The backdrop: flowing paint in the colours of the day's photo, drawn by src/ui/backdrop.ts. Web only. */
-      #backdrop {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        display: block;
-        opacity: 0;
-        transition: opacity 0.8s ease-out;
-      }
-      #backdrop.on {
-        opacity: 1;
-      }
-      /* Fine still scanlines over the moving colour, to quieten it. --line is set in src/ui/backdrop.ts. */
-      #backdrop-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.3) var(--line, 1px), transparent var(--line, 1px));
-        background-size: 100% calc(var(--line, 1px) * 3);
-      }
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jigsup has moved to jigsup.fun</title>
+    <meta name="robots" content="noindex" />
+    <link rel="canonical" href="https://jigsup.fun/" />
+    <script>
+      // Keep ?puzzle=N so old practice links still open the same puzzle.
+      location.replace('https://jigsup.fun/' + location.search);
+    </script>
+    <meta http-equiv="refresh" content="0; url=https://jigsup.fun/" />
+    <style>
+      body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        background: #1f2442; color: #eff1fb; font: 18px system-ui, sans-serif; }
+      a { color: #f0f465; }
     </style>
-  <link rel="icon" href="/puzzle-game/favicon.ico"/></head>
-
+  </head>
   <body>
-    <noscript>You need to enable JavaScript to play.</noscript>
-    <canvas id="backdrop" aria-hidden="true"></canvas>
-    <div id="backdrop-overlay" aria-hidden="true"></div>
-    <div id="root"></div>
-  <script src="/puzzle-game/_expo/static/js/web/index-53f9cfae25cab00093ed0ee6f6d78986.js" defer></script>
-</body>
+    <p>Jigsup has moved to <a href="https://jigsup.fun/">jigsup.fun</a>.</p>
+  </body>
 </html>
