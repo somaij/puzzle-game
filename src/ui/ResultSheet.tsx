@@ -142,15 +142,15 @@ export function ResultSheet({ puzzleNumber, game, moves, stats, onClose, onFinis
   const summary = won
     ? `All ${PIECE_COUNT} pieces placed.`
     : game.placedCount === PIECE_COUNT
-      ? 'Picture finished. Your score locked at the last miss.'
-      : `${placed} of ${PIECE_COUNT} pieces placed. Your score is locked.`;
+      ? 'Out of misses. Picture finished; your score locked at the last miss.'
+      : `Out of misses at ${placed} of ${PIECE_COUNT} pieces. Your score is locked.`;
 
   return (
     <View testID="result-sheet" style={styles.backdrop}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View testID="end-card" style={styles.card}>
           <Text accessibilityRole="header" style={styles.title}>
-            {won ? 'Solved' : 'Out of misses'}
+            {won ? 'Solved' : 'The jig is up'}
           </Text>
           <Text testID="final-score" style={styles.score}>
             {withCommas(game.score)}

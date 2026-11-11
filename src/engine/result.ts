@@ -1,8 +1,8 @@
 import { PIECE_COUNT } from './constants';
 import type { GameState } from './game';
 
-/** The working title, shown in the shared result. */
-export const GAME_NAME = 'Daily Jigsaw';
+/** The game's name, shown in the shared result. */
+export const GAME_NAME = 'Jigsup';
 
 const withCommas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 

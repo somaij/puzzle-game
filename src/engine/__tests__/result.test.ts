@@ -7,7 +7,7 @@ describe('share text', () => {
 
   it('gives each fact of a solved game its own line and emoji', () => {
     expect(shareText({ puzzle: 49, won: true, score: 2349, placed: 24, moves: [joined(20)] }, url)).toBe(
-      `🧩 Daily Jigsaw #49\n✅ Solved\n🎯 No misses\n⭐ 2,349 points\n⚡ Top speed ×2.0\n${url}`,
+      `🧩 Jigsup #49\n✅ Solved\n🎯 No misses\n⭐ 2,349 points\n⚡ Top speed ×2.0\n${url}`,
     );
   });
 
@@ -22,7 +22,7 @@ describe('share text', () => {
 
   it('says how far a failed game got', () => {
     const text = shareText({ puzzle: 2, won: false, score: 554, placed: 11, moves: [joined(11), ...Array<ScoredMove>(12).fill(miss)] }, url);
-    expect(text).toBe(`🧩 Daily Jigsaw #2\n💔 Out of misses at 11/24 pieces\n⭐ 554 points\n⚡ Top speed ×1.1\n${url}`);
+    expect(text).toBe(`🧩 Jigsup #2\n💔 Out of misses at 11/24 pieces\n⭐ 554 points\n⚡ Top speed ×1.1\n${url}`);
   });
 });
 

@@ -7,8 +7,8 @@ Guidance for Claude Code working in this repository.
 A **daily shared jigsaw puzzle for the web**, in the spirit of Wordle: one image
 and one cut per day, the same for every player, with a shareable result. Built
 with Expo so an Android (and iOS) app can later be built from the same code.
-Working title only; a plain, descriptive final name is still open (the POC used
-"Blind Cut" / "PulsePuzzle", and neither is final).
+The name is **Jigsup** (the earlier working title was "Daily Jigsaw"). See
+"Brand" below.
 
 The core idea: pieces are fed from a small **hand of 3** (a hold slot is built but switched off)
 rather than dumped in a tray. You drag any hand piece
@@ -20,8 +20,9 @@ simple base action made deep by a scoring system.
 Product filter: **solo-buildable, minimal surface area, privacy-first.** No
 accounts, no ads, and no backend beyond one small endpoint for anonymous game results.
 
-Earlier direction (now "later", see Product direction): a native Android app
-that makes jigsaws from *your own photos*, sold as a one-time purchase.
+Earlier direction, now dropped: a native Android app that makes jigsaws from
+*your own photos*. The owner chose a Wordle-like experience instead: one shared
+puzzle a day, and nothing personal to upload.
 
 ## Status
 
@@ -311,10 +312,11 @@ tenths); treat them as a starting point, not gospel.
 
 - **Now:** the daily web puzzle. One play per day, a result screen, a shareable
   text result, and stats/streak kept in the browser (localStorage).
-- **Later:** Android build from the same code; an own-photo mode (photos cut
-  on-device, never uploaded); a Zen mode (no timer, no score) alongside the
-  scored mode; monetization (none on web for now, since Wordle was free; a
-  one-time purchase in the app is the likely shape).
+- **Later:** Android build from the same code; a Zen mode (no timer, no score)
+  alongside the scored mode; monetization (none on web for now, since Wordle
+  was free).
+- **Not planned:** an own-photo mode (puzzles from the player's own photos).
+  Dropped to keep the Wordle-like focus on one shared daily puzzle.
 - **Genre flaws to keep fixing** (the differentiators): no intrusive ads, no
   subscriptions, reliable save & resume, no cramped-pieces-on-phone problem
   (the small hand, instead of a tray of every piece, sidesteps it).
@@ -403,11 +405,11 @@ Run typecheck, lint and tests before calling a task done.
   4. ✅ Daily loop: one play per day, result screen, share text, stats/streak.
   5. Publish the static web build. (Test build already on GitHub Pages; the
      public launch, and its domain, is still to decide.)
-  6. Later: Android build, own-photo mode, Zen mode, monetization.
+  6. Later: Android build, Zen mode, monetization.
 - **Adversarial evaluation.** Pressure-test ideas; push back on hand-wavy
   reasoning rather than validating by default. Update positions with precision.
-- **Plain, descriptive naming** for the app and for code: functional over
-  evocative/coined.
+- **Plain, descriptive naming** for code: functional over evocative/coined.
+  (The app's own name is the exception: Jigsup, a pun, chosen deliberately.)
 - **Consolidated specs.** Keep design/strategy decisions in markdown docs in
   `docs/` (or here), not scattered comments.
 
@@ -452,11 +454,35 @@ Run typecheck, lint and tests before calling a task done.
   - *Paid personal daily slot (people):* rejected. A stranger's personal photo
     makes the shared puzzle worse for everyone else and raises consent issues
     (faces, children). What people really want is a private puzzle to send
-    someone, which needs server storage and breaks "photos never leave the
-    device", so it would be a separate product decision.
-  - *Better fits sooner:* a tip jar, a paid archive of past puzzles, and the
-    app's planned one-time unlock.
+    someone, which needs server storage for players' photos, so it would be a
+    separate product decision.
+  - *Better fits sooner:* a tip jar, a paid archive of past puzzles, and a
+    one-time unlock in the app.
   - *Cheap prep now:* store each image with a title, credit and optional link
     rather than just a file (a sponsor later is just a different credit), and
     measure daily players privately when moving off GitHub Pages.
-- **Final app name.**
+
+## Brand
+
+- **Name: Jigsup.** Reads as "the jig is up" (fits running out of misses) and
+  "today's jig is up" (a new puzzle each day). Rejected along the way: Jigged,
+  Speedsaw, Jigest, Puzeed, Glimpse (the game isn't about the glimpse), foreign
+  words (Pezzo), and longer phrases.
+- **Wordmark:** "Jigs" in white (`text`) and "up" in lemon (`accent`), in
+  Shantell Sans ExtraBold, with a small lemon jigsaw piece as the dot on the i.
+  `Wordmark` draws it from paths traced from the bundled font
+  (`scripts/make-wordmark.py` writes `src/ui/wordmarkPaths.ts`); it heads the
+  onboarding popup. The lemon here is the brand, the one exception to "lemon
+  means what a piece is worth"; keep the wordmark off the play screen.
+- **App icon:** a dark lowercase "j" on lemon, its dot a jigsaw piece
+  (`scripts/make-icons.mjs`). At browser-tab size the dot blurs, so the favicon
+  is the dark piece alone on lemon.
+- **Tagline:** "One jigsaw a day. Miss twelve and the jig is up." (page
+  description and install manifest). It names the miss limit, so it changes if
+  `MISS_LIMIT` does. Running out of misses is titled "The jig is up" on the
+  result card.
+- Mock-up: `docs/brand/jigsup-brand.png` (a sketch; the final logo needs drawing
+  as proper artwork).
+- **Domain:** not bought yet. jigsup.com is taken; jigsup.day (preferred) and
+  jigsup.app looked free on 2026-11-10. Move off GitHub Pages before the public
+  launch, so early players' streaks (saved per web address) aren't lost.

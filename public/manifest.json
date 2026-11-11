@@ -1,7 +1,7 @@
 {
-  "name": "Daily Jigsaw",
-  "short_name": "Daily Jigsaw",
-  "description": "One jigsaw a day, the same for everyone.",
+  "name": "Jigsup",
+  "short_name": "Jigsup",
+  "description": "One jigsaw a day. Miss twelve and the jig is up.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

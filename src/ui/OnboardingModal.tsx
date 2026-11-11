@@ -8,6 +8,7 @@ import { colors, overlays } from './colors';
 import { Cluster, loneShape, PhotoPiece, plainShape, spotShape } from './Pictures';
 import { Rich } from './Rich';
 import { type } from './type';
+import { Wordmark } from './Wordmark';
 
 type Props = {
   visible: boolean;
@@ -95,9 +96,10 @@ export function OnboardingModal({ visible, onDismiss, cuts, image, narrow }: Pro
   return (
     <View testID="onboarding-modal" style={styles.backdrop}>
       <View style={[styles.card, narrow && styles.cardNarrow]}>
-        <Text accessibilityRole="header" style={[type.titleScreen, styles.text, styles.title]}>
-          A daily jigsaw from memory
-        </Text>
+        <View style={styles.brand}>
+          <Wordmark height={narrow ? 40 : 48} />
+          <Text style={[type.body, styles.muted, styles.title]}>A daily jigsaw from memory</Text>
+        </View>
         <View style={narrow ? styles.stepsColumn : styles.stepsRow}>
           {steps.map((step, i) => (
             <View key={step.head} style={narrow ? styles.stepRow : styles.stepTile}>
@@ -204,6 +206,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   cardNarrow: { maxWidth: 358, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 20, gap: 20 },
+  brand: { alignItems: 'center', gap: 6 },
   title: { textAlign: 'center' },
   stepsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   stepsColumn: { gap: 10 },
