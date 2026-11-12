@@ -3,8 +3,9 @@ import { generateCuts, type Cut } from './cuts';
 import { mulberry32, shuffle } from './rng';
 
 /**
- * Puzzle #1 is on this local calendar date. Set to the day local testing of the fresh start began;
- * move it to the real launch day before this goes live, so launch day is #1.
+ * Puzzle #1 is on this local calendar date: the day the fresh photo list started. Moving it shifts
+ * every day's photo and number, so once players are counting days, leave it (if it must move, bump
+ * SAVE_KEY and STATS_KEY in GameScreen so old saves can't land on the wrong day).
  */
 export const LAUNCH_DATE = { year: 2026, month: 11, day: 11 };
 
