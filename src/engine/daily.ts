@@ -7,7 +7,7 @@ import { mulberry32, shuffle } from './rng';
  * every day's photo and number, so once players are counting days, leave it (if it must move, bump
  * SAVE_KEY and STATS_KEY in GameScreen so old saves can't land on the wrong day).
  */
-export const LAUNCH_DATE = { year: 2026, month: 11, day: 11 };
+export const LAUNCH_DATE = { year: 2026, month: 11, day: 12 };
 
 const MS_PER_DAY = 86_400_000;
 

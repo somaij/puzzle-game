@@ -68,10 +68,10 @@ type SavedGame = {
   tried?: Record<number, number[]>;
 };
 
-// v2: the puzzle numbering restarted with the new photo list, so saves and stats from before it
-// (puzzle numbers up to ~52) would block or misreport the new days. Old keys are simply ignored.
-const SAVE_KEY = 'daily-game-v2';
-const STATS_KEY = 'daily-stats-v2';
+// Bumped whenever the puzzle numbering restarts (v3: day 1 moved to 2026-11-12), so saves and stats
+// from the old numbering can't block or misreport the new days. Old keys are simply ignored.
+const SAVE_KEY = 'daily-game-v3';
+const STATS_KEY = 'daily-stats-v3';
 /** Let the scoring animation finish before the result covers it. */
 const RESULT_DELAY_MS = 1500;
 
