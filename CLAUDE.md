@@ -491,8 +491,13 @@ Run typecheck, lint and tests before calling a task done.
 - **App icon:** a dark lowercase "j" on lemon, its dot a jigsaw piece
   (`scripts/make-icons.mjs`). At browser-tab size the dot blurs, so the favicon
   is the dark piece alone on lemon.
+- **Link preview:** `public/og-image.png` (1200×630, drawn by
+  `scripts/make-share-image.mjs`): the wordmark and tagline on indigo with a
+  few loose pieces, shown when a jigsup.fun link is posted (Open Graph tags in
+  `public/index.html`, which also holds the canonical URL; `robots.txt` and
+  `sitemap.xml` sit beside it for Google Search Console).
 - **Tagline:** "One jigsaw a day. Miss twelve and the jig is up." (page
-  description and install manifest). It names the miss limit, so it changes if
+  description, link preview and install manifest). It names the miss limit, so it changes if
   `MISS_LIMIT` does. Running out of misses is titled "The jig is up" on the
   result card.
 - Mock-up: `docs/brand/jigsup-brand.png` (a sketch; the final logo needs drawing
